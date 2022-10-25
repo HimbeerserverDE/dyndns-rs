@@ -70,7 +70,7 @@ fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> anyhow::Resul
     let mut ipv4 = None;
 
     loop {
-        let new_ipv4 = preferred_ip::get_ipv4_global(config.link4)?;
+        let new_ipv4 = preferred_ip::ipv4_global(config.link4)?;
 
         if ipv4.is_none() || ipv4.unwrap() != new_ipv4 {
             tx.send(new_ipv4)?;
@@ -85,7 +85,7 @@ fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> anyhow::Resul
     let mut ipv6 = None;
 
     loop {
-        let new_ipv6 = preferred_ip::get_ipv6_unicast_global(config.link6)?;
+        let new_ipv6 = preferred_ip::ipv6_unicast_global(config.link6)?;
 
         if ipv6.is_none() || ipv6.unwrap() != new_ipv6 {
             tx.send(new_ipv6)?;
