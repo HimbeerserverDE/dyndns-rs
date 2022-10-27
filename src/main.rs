@@ -1,3 +1,4 @@
+use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::mpsc;
@@ -9,6 +10,69 @@ use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
 use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
+
+#[derive(Debug)]
+enum Error {
+    ChannelRecv(mpsc::RecvError),
+    ChannelSend4(mpsc::SendError<Ipv4Addr>),
+    ChannelSend6(mpsc::SendError<Ipv6Addr>),
+    Inwx(inwx::Error),
+    PreferredIp(preferred_ip::Error),
+    ParseAddr(std::net::AddrParseError),
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ChannelRecv(e) => write!(fmt, "can't recv from mpsc channel: {}", e),
+            Self::ChannelSend4(e) => write!(fmt, "can't send to mpsc channel: {}", e),
+            Self::ChannelSend6(e) => write!(fmt, "can't send to mpsc channel: {}", e),
+            Self::Inwx(e) => write!(fmt, "inwx library error: {}", e),
+            Self::PreferredIp(e) => write!(fmt, "preferred_ip library error: {}", e),
+            Self::ParseAddr(e) => write!(fmt, "can't parse ip address: {}", e),
+        }
+    }
+}
+
+impl From<mpsc::RecvError> for Error {
+    fn from(e: mpsc::RecvError) -> Self {
+        Self::ChannelRecv(e)
+    }
+}
+
+impl From<mpsc::SendError<Ipv4Addr>> for Error {
+    fn from(e: mpsc::SendError<Ipv4Addr>) -> Self {
+        Self::ChannelSend4(e)
+    }
+}
+
+impl From<mpsc::SendError<Ipv6Addr>> for Error {
+    fn from(e: mpsc::SendError<Ipv6Addr>) -> Self {
+        Self::ChannelSend6(e)
+    }
+}
+
+impl From<inwx::Error> for Error {
+    fn from(e: inwx::Error) -> Self {
+        Self::Inwx(e)
+    }
+}
+
+impl From<preferred_ip::Error> for Error {
+    fn from(e: preferred_ip::Error) -> Self {
+        Self::PreferredIp(e)
+    }
+}
+
+impl From<std::net::AddrParseError> for Error {
+    fn from(e: std::net::AddrParseError) -> Self {
+        Self::ParseAddr(e)
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Copy, Debug)]
 struct Config<'a> {
@@ -23,15 +87,15 @@ struct Config<'a> {
     interval6: Duration,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let config = Config {
         user: "inwxclient",
         pass: "inwx1@client",
         records4: &[75506],
         records6: &[75503],
         prefix_len: 56,
-        link4: "wlan0",
-        link6: "wlan0",
+        link4: "eth0",
+        link6: "eth0",
         interval4: Duration::from_secs(30),
         interval6: Duration::from_secs(30),
     };
@@ -41,20 +105,20 @@ fn main() -> anyhow::Result<()> {
 
     let push4_thread = thread::spawn(move || {
         push4(config, rx4)?;
-        Ok::<(), anyhow::Error>(())
+        Ok::<(), Error>(())
     });
     let push6_thread = thread::spawn(move || {
         push6(config, rx6)?;
-        Ok::<(), anyhow::Error>(())
+        Ok::<(), Error>(())
     });
 
     let monitor4_thread = thread::spawn(move || {
         monitor4(config, tx4)?;
-        Ok::<(), anyhow::Error>(())
+        Ok::<(), Error>(())
     });
     let monitor6_thread = thread::spawn(move || {
         monitor6(config, tx6)?;
-        Ok::<(), anyhow::Error>(())
+        Ok::<(), Error>(())
     });
 
     push4_thread.join().unwrap()?;
@@ -66,7 +130,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> anyhow::Result<Ipv4Addr> {
+fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<Ipv4Addr> {
     let mut ipv4 = None;
 
     loop {
@@ -81,7 +145,7 @@ fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> anyhow::Resul
     }
 }
 
-fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> anyhow::Result<Ipv6Addr> {
+fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Addr> {
     let mut ipv6 = None;
 
     loop {
@@ -96,7 +160,7 @@ fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> anyhow::Resul
     }
 }
 
-fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> anyhow::Result<()> {
+fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     loop {
         match check_for_addrs4(config, tx.clone()) {
             Ok(_) => println!("check_for_addrs4 exited Ok (this is bad)"),
@@ -107,7 +171,7 @@ fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> anyhow::Result<()> {
     }
 }
 
-fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> anyhow::Result<()> {
+fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     loop {
         match check_for_addrs6(config, tx.clone()) {
             Ok(_) => println!("check_for_addrs6 exited Ok (this is bad)"),
@@ -118,7 +182,7 @@ fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> anyhow::Result<()> {
     }
 }
 
-fn push4(config: Config, rx: mpsc::Receiver<Ipv4Addr>) -> anyhow::Result<()> {
+fn push4(config: Config, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     let mut last_address = None;
     loop {
         let address = rx.recv()?;
@@ -146,7 +210,7 @@ fn push4(config: Config, rx: mpsc::Receiver<Ipv4Addr>) -> anyhow::Result<()> {
     }
 }
 
-fn push6(config: Config, rx: mpsc::Receiver<Ipv6Addr>) -> anyhow::Result<()> {
+fn push6(config: Config, rx: mpsc::Receiver<Ipv6Addr>) -> Result<()> {
     let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
