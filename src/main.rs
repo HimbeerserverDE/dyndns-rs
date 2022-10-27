@@ -1,7 +1,7 @@
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -74,50 +74,55 @@ impl From<std::net::AddrParseError> for Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Copy, Debug)]
-struct Config<'a> {
-    user: &'a str,
-    pass: &'a str,
-    records4: &'a [i32],
-    records6: &'a [i32],
+#[derive(Clone, Debug)]
+struct Config {
+    user: String,
+    pass: String,
+    records4: Vec<i32>,
+    records6: Vec<i32>,
     prefix_len: u32,
-    link4: &'a str,
-    link6: &'a str,
+    link4: String,
+    link6: String,
     interval4: Duration,
     interval6: Duration,
 }
 
 fn main() -> Result<()> {
-    let config = Config {
-        user: "inwxclient",
-        pass: "inwx1@client",
-        records4: &[75506],
-        records6: &[75503],
+    let config = Arc::new(Config {
+        user: String::from("inwxclient"),
+        pass: String::from("inwx1@client"),
+        records4: vec![75506],
+        records6: vec![75503],
         prefix_len: 56,
-        link4: "eth0",
-        link6: "eth0",
+        link4: String::from("eth0"),
+        link6: String::from("eth0"),
         interval4: Duration::from_secs(30),
         interval6: Duration::from_secs(30),
-    };
+    });
+
+    let config0 = config.clone();
+    let config1 = config.clone();
+    let config2 = config.clone();
+    let config3 = config;
 
     let (tx4, rx4) = mpsc::channel();
     let (tx6, rx6) = mpsc::channel();
 
     let push4_thread = thread::spawn(move || {
-        push4(config, rx4)?;
+        push4(config0, rx4)?;
         Ok::<(), Error>(())
     });
     let push6_thread = thread::spawn(move || {
-        push6(config, rx6)?;
+        push6(config1, rx6)?;
         Ok::<(), Error>(())
     });
 
     let monitor4_thread = thread::spawn(move || {
-        monitor4(config, tx4)?;
+        monitor4(config2, tx4)?;
         Ok::<(), Error>(())
     });
     let monitor6_thread = thread::spawn(move || {
-        monitor6(config, tx6)?;
+        monitor6(config3, tx6)?;
         Ok::<(), Error>(())
     });
 
@@ -130,11 +135,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<Ipv4Addr> {
+fn check_for_addrs4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<Ipv4Addr> {
     let mut ipv4 = None;
 
     loop {
-        let new_ipv4 = preferred_ip::ipv4_global(config.link4)?;
+        let new_ipv4 = preferred_ip::ipv4_global(&config.link4)?;
 
         if ipv4.is_none() || ipv4.unwrap() != new_ipv4 {
             tx.send(new_ipv4)?;
@@ -145,11 +150,11 @@ fn check_for_addrs4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<Ipv4Ad
     }
 }
 
-fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Addr> {
+fn check_for_addrs6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Addr> {
     let mut ipv6 = None;
 
     loop {
-        let new_ipv6 = preferred_ip::ipv6_unicast_global(config.link6)?;
+        let new_ipv6 = preferred_ip::ipv6_unicast_global(&config.link6)?;
 
         if ipv6.is_none() || ipv6.unwrap() != new_ipv6 {
             tx.send(new_ipv6)?;
@@ -160,9 +165,9 @@ fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Ad
     }
 }
 
-fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
+fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     loop {
-        match check_for_addrs4(config, tx.clone()) {
+        match check_for_addrs4(config.clone(), tx.clone()) {
             Ok(_) => { /* unreachable */ },
             Err(e) => println!("{}", e),
         }
@@ -171,9 +176,9 @@ fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     }
 }
 
-fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
+fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     loop {
-        match check_for_addrs6(config, tx.clone()) {
+        match check_for_addrs6(config.clone(), tx.clone()) {
             Ok(_) => { /* unreachable */ },
             Err(e) => println!("{}", e),
         }
@@ -182,12 +187,12 @@ fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     }
 }
 
-fn push4(config: Config, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
+fn push4(config: Arc<Config>, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     let mut last_address = None;
     loop {
         let address = rx.recv()?;
         if last_address.is_none() || address != last_address.unwrap() {
-            let clt = Client::login(Endpoint::Sandbox, config.user, config.pass)?;
+            let clt = Client::login(Endpoint::Sandbox, &config.user, &config.pass)?;
 
             clt.call(RecordUpdate {
                 ids: config.records4.to_vec(),
@@ -210,15 +215,15 @@ fn push4(config: Config, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     }
 }
 
-fn push6(config: Config, rx: mpsc::Receiver<Ipv6Addr>) -> Result<()> {
+fn push6(config: Arc<Config>, rx: mpsc::Receiver<Ipv6Addr>) -> Result<()> {
     let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
         if last_prefix.is_none() || prefix != last_prefix.unwrap() {
-            let clt = Client::login(Endpoint::Sandbox, config.user, config.pass)?;
+            let clt = Client::login(Endpoint::Sandbox, &config.user, &config.pass)?;
 
             let mut total_records = Vec::new();
-            for id in config.records6 {
+            for id in &config.records6 {
                 let info: RecordInfoResponse = clt
                     .call(RecordInfoCall {
                         domain_name: None,
