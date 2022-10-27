@@ -163,7 +163,7 @@ fn check_for_addrs6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Ad
 fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     loop {
         match check_for_addrs4(config, tx.clone()) {
-            Ok(_) => println!("check_for_addrs4 exited Ok (this is bad)"),
+            Ok(_) => { /* unreachable */ },
             Err(e) => println!("{}", e),
         }
 
@@ -174,7 +174,7 @@ fn monitor4(config: Config, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
 fn monitor6(config: Config, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     loop {
         match check_for_addrs6(config, tx.clone()) {
-            Ok(_) => println!("check_for_addrs6 exited Ok (this is bad)"),
+            Ok(_) => { /* unreachable */ },
             Err(e) => println!("{}", e),
         }
 
