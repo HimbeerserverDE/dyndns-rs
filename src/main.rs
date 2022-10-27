@@ -1,7 +1,7 @@
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
-use std::sync::{Arc, mpsc};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
@@ -168,7 +168,7 @@ fn check_for_addrs6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<I
 fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     loop {
         match check_for_addrs4(config.clone(), tx.clone()) {
-            Ok(_) => { /* unreachable */ },
+            Ok(_) => { /* unreachable */ }
             Err(e) => println!("{}", e),
         }
 
@@ -179,7 +179,7 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
 fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     loop {
         match check_for_addrs6(config.clone(), tx.clone()) {
-            Ok(_) => { /* unreachable */ },
+            Ok(_) => { /* unreachable */ }
             Err(e) => println!("{}", e),
         }
 
