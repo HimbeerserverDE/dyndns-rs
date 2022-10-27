@@ -109,33 +109,57 @@ fn main() -> Result<()> {
     let (tx6, rx6) = mpsc::channel();
 
     let push4_thread = thread::spawn(move || {
-        push4(config0, rx4)?;
-        Ok::<(), Error>(())
+        loop {
+            match push4(config0.clone(), &rx4) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => println!("failed to push ipv4 address: {}", e),
+            }
+
+            thread::sleep(config0.interval4);
+        }
     });
     let push6_thread = thread::spawn(move || {
-        push6(config1, rx6)?;
-        Ok::<(), Error>(())
+        loop {
+            match push6(config1.clone(), &rx6) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => println!("failed to push ipv6 prefix: {}", e),
+            }
+
+            thread::sleep(config1.interval6);
+        }
     });
 
     let monitor4_thread = thread::spawn(move || {
-        monitor4(config2, tx4)?;
-        Ok::<(), Error>(())
+        loop {
+            match monitor4(config2.clone(), tx4.clone()) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => println!("failed to monitor ipv4 address: {}", e),
+            }
+
+            thread::sleep(config2.interval4);
+        }
     });
     let monitor6_thread = thread::spawn(move || {
-        monitor6(config3, tx6)?;
-        Ok::<(), Error>(())
+        loop {
+            match monitor6(config3.clone(), tx6.clone()) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => println!("failed to monitor ipv6 prefix: {}", e),
+            }
+
+            thread::sleep(config3.interval6);
+        }
     });
 
-    push4_thread.join().unwrap()?;
-    push6_thread.join().unwrap()?;
+    push4_thread.join().unwrap();
+    push6_thread.join().unwrap();
 
-    monitor4_thread.join().unwrap()?;
-    monitor6_thread.join().unwrap()?;
+    monitor4_thread.join().unwrap();
+    monitor6_thread.join().unwrap();
 
     Ok(())
 }
 
-fn check_for_addrs4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<Ipv4Addr> {
+fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     let mut ipv4 = None;
 
     loop {
@@ -150,7 +174,7 @@ fn check_for_addrs4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<I
     }
 }
 
-fn check_for_addrs6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<Ipv6Addr> {
+fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
@@ -165,29 +189,7 @@ fn check_for_addrs6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<I
     }
 }
 
-fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
-    loop {
-        match check_for_addrs4(config.clone(), tx.clone()) {
-            Ok(_) => { /* unreachable */ }
-            Err(e) => println!("{}", e),
-        }
-
-        thread::sleep(config.interval4);
-    }
-}
-
-fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
-    loop {
-        match check_for_addrs6(config.clone(), tx.clone()) {
-            Ok(_) => { /* unreachable */ }
-            Err(e) => println!("{}", e),
-        }
-
-        thread::sleep(config.interval6);
-    }
-}
-
-fn push4(config: Arc<Config>, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
+fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     let mut last_address = None;
     loop {
         let address = rx.recv()?;
@@ -215,7 +217,7 @@ fn push4(config: Arc<Config>, rx: mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     }
 }
 
-fn push6(config: Arc<Config>, rx: mpsc::Receiver<Ipv6Addr>) -> Result<()> {
+fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Addr>) -> Result<()> {
     let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
