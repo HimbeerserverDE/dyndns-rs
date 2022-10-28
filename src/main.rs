@@ -5,20 +5,21 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
-use arrayref::array_ref;
 use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
 use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
+use ipnet::{IpBitAnd, IpBitOr, Ipv6Net};
 
 #[derive(Debug)]
 enum Error {
     ChannelRecv(mpsc::RecvError),
     ChannelSend4(mpsc::SendError<Ipv4Addr>),
-    ChannelSend6(mpsc::SendError<Ipv6Addr>),
+    ChannelSend6(mpsc::SendError<Ipv6Net>),
     Inwx(inwx::Error),
     PreferredIp(preferred_ip::Error),
     ParseAddr(std::net::AddrParseError),
+    PrefixLen(ipnet::PrefixLenError),
 }
 
 impl std::error::Error for Error {}
@@ -32,6 +33,7 @@ impl fmt::Display for Error {
             Self::Inwx(e) => write!(fmt, "inwx library error: {}", e),
             Self::PreferredIp(e) => write!(fmt, "preferred_ip library error: {}", e),
             Self::ParseAddr(e) => write!(fmt, "can't parse ip address: {}", e),
+            Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
         }
     }
 }
@@ -48,8 +50,8 @@ impl From<mpsc::SendError<Ipv4Addr>> for Error {
     }
 }
 
-impl From<mpsc::SendError<Ipv6Addr>> for Error {
-    fn from(e: mpsc::SendError<Ipv6Addr>) -> Self {
+impl From<mpsc::SendError<Ipv6Net>> for Error {
+    fn from(e: mpsc::SendError<Ipv6Net>) -> Self {
         Self::ChannelSend6(e)
     }
 }
@@ -72,6 +74,12 @@ impl From<std::net::AddrParseError> for Error {
     }
 }
 
+impl From<ipnet::PrefixLenError> for Error {
+    fn from(e: ipnet::PrefixLenError) -> Self {
+        Self::PrefixLen(e)
+    }
+}
+
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug)]
@@ -80,7 +88,7 @@ struct Config {
     pass: String,
     records4: Vec<i32>,
     records6: Vec<i32>,
-    prefix_len: u32,
+    prefix_len: u8,
     link4: String,
     link6: String,
     interval4: Duration,
@@ -174,14 +182,14 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
     }
 }
 
-fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Addr>) -> Result<()> {
+fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
         let new_ipv6 = preferred_ip::ipv6_unicast_global(&config.link6)?;
 
         if ipv6.is_none() || ipv6.unwrap() != new_ipv6 {
-            tx.send(new_ipv6)?;
+            tx.send(Ipv6Net::new(new_ipv6, config.prefix_len)?)?;
             ipv6 = Some(new_ipv6);
         }
 
@@ -217,7 +225,7 @@ fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Addr>) -> Result<()> {
     }
 }
 
-fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Addr>) -> Result<()> {
+fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
     let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
@@ -249,11 +257,10 @@ fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Addr>) -> Result<()> {
             for record in total_records {
                 let address = Ipv6Addr::from_str(&record.content)?;
 
-                let b_addr = address.octets().to_vec();
-                let b_net = prefix.octets().to_vec();
-
-                let new_raw = change_prefix(b_addr, b_net, config.prefix_len);
-                let new = Ipv6Addr::from(*array_ref!(new_raw.as_slice(), 0, 16));
+                // Get the interface identifier.
+                let if_id = address.bitand(prefix.hostmask());
+                let clean_prefix = prefix.addr().bitand(prefix.netmask());
+                let new = clean_prefix.bitor(if_id);
 
                 clt.call(RecordUpdate {
                     ids: vec![record.id],
@@ -275,22 +282,4 @@ fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Addr>) -> Result<()> {
             last_prefix = Some(prefix);
         }
     }
-}
-
-fn change_prefix(address: Vec<u8>, prefix: Vec<u8>, bits: u32) -> Vec<u8> {
-    address
-        .iter()
-        .zip(prefix.iter())
-        .enumerate()
-        .map(|(i, (a, b))| {
-            if i as u32 >= bits / 8 {
-                let ones = bits % 8;
-                let mask = !(0xff_u8.overflowing_shr(ones).0);
-
-                (a & !mask) | (b & mask)
-            } else {
-                *b
-            }
-        })
-        .collect()
 }
