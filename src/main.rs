@@ -131,7 +131,7 @@ fn main() -> Result<()> {
         loop {
             match push4(config0.clone(), &rx4) {
                 Ok(_) => { /* unreachable */ }
-                Err(e) => println!("failed to push ipv4 address: {}", e),
+                Err(e) => eprintln!("failed to push ipv4 address: {}", e),
             }
 
             thread::sleep(Duration::from_secs(config0.interval4));
@@ -141,7 +141,7 @@ fn main() -> Result<()> {
         loop {
             match push6(config1.clone(), &rx6) {
                 Ok(_) => { /* unreachable */ }
-                Err(e) => println!("failed to push ipv6 prefix: {}", e),
+                Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
             }
 
             thread::sleep(Duration::from_secs(config1.interval6));
@@ -152,7 +152,7 @@ fn main() -> Result<()> {
         loop {
             match monitor4(config2.clone(), tx4.clone()) {
                 Ok(_) => { /* unreachable */ }
-                Err(e) => println!("failed to monitor ipv4 address: {}", e),
+                Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
             }
 
             thread::sleep(Duration::from_secs(config2.interval4));
@@ -162,7 +162,7 @@ fn main() -> Result<()> {
         loop {
             match monitor6(config3.clone(), tx6.clone()) {
                 Ok(_) => { /* unreachable */ }
-                Err(e) => println!("failed to monitor ipv6 prefix: {}", e),
+                Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
             }
 
             thread::sleep(Duration::from_secs(config3.interval6));
