@@ -109,8 +109,8 @@ struct Config {
     prefix_len: u8,
     link4: String,
     link6: String,
-    interval4: Duration,
-    interval6: Duration,
+    interval4: u64,
+    interval6: u64,
 }
 
 fn main() -> Result<()> {
@@ -134,7 +134,7 @@ fn main() -> Result<()> {
                 Err(e) => println!("failed to push ipv4 address: {}", e),
             }
 
-            thread::sleep(config0.interval4);
+            thread::sleep(Duration::from_secs(config0.interval4));
         }
     });
     let push6_thread = thread::spawn(move || {
@@ -144,7 +144,7 @@ fn main() -> Result<()> {
                 Err(e) => println!("failed to push ipv6 prefix: {}", e),
             }
 
-            thread::sleep(config1.interval6);
+            thread::sleep(Duration::from_secs(config1.interval6));
         }
     });
 
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
                 Err(e) => println!("failed to monitor ipv4 address: {}", e),
             }
 
-            thread::sleep(config2.interval4);
+            thread::sleep(Duration::from_secs(config2.interval4));
         }
     });
     let monitor6_thread = thread::spawn(move || {
@@ -165,7 +165,7 @@ fn main() -> Result<()> {
                 Err(e) => println!("failed to monitor ipv6 prefix: {}", e),
             }
 
-            thread::sleep(config3.interval6);
+            thread::sleep(Duration::from_secs(config3.interval6));
         }
     });
 
@@ -189,7 +189,7 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
             ipv4 = Some(new_ipv4);
         }
 
-        thread::sleep(config.interval4);
+        thread::sleep(Duration::from_secs(config.interval4));
     }
 }
 
@@ -204,7 +204,7 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
             ipv6 = Some(new_ipv6);
         }
 
-        thread::sleep(config.interval6);
+        thread::sleep(Duration::from_secs(config.interval6));
     }
 }
 
