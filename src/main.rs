@@ -11,7 +11,7 @@ use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
 use ipnet::{IpBitAnd, IpBitOr, Ipv6Net};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 enum Error {
