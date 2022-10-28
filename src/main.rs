@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fs::File;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
@@ -10,6 +11,7 @@ use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
 use ipnet::{IpBitAnd, IpBitOr, Ipv6Net};
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
 enum Error {
@@ -20,6 +22,8 @@ enum Error {
     PreferredIp(preferred_ip::Error),
     ParseAddr(std::net::AddrParseError),
     PrefixLen(ipnet::PrefixLenError),
+    Io(std::io::Error),
+    SerdeJson(serde_json::Error),
 }
 
 impl std::error::Error for Error {}
@@ -34,6 +38,8 @@ impl fmt::Display for Error {
             Self::PreferredIp(e) => write!(fmt, "preferred_ip library error: {}", e),
             Self::ParseAddr(e) => write!(fmt, "can't parse ip address: {}", e),
             Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
+            Self::Io(e) => write!(fmt, "io error: {}", e),
+            Self::SerdeJson(e) => write!(fmt, "serde_json library error: {}", e),
         }
     }
 }
@@ -80,9 +86,21 @@ impl From<ipnet::PrefixLenError> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Self::SerdeJson(e)
+    }
+}
+
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Config {
     user: String,
     pass: String,
@@ -96,17 +114,10 @@ struct Config {
 }
 
 fn main() -> Result<()> {
-    let config = Arc::new(Config {
-        user: String::from("inwxclient"),
-        pass: String::from("inwx1@client"),
-        records4: vec![75506],
-        records6: vec![75503],
-        prefix_len: 56,
-        link4: String::from("eth0"),
-        link6: String::from("eth0"),
-        interval4: Duration::from_secs(30),
-        interval6: Duration::from_secs(30),
-    });
+    let config_file = File::open("/etc/dyndns.conf")?;
+
+    let parsed_config: Config = serde_json::from_reader(config_file)?;
+    let config = Arc::new(parsed_config);
 
     let config0 = config.clone();
     let config1 = config.clone();

@@ -9,3 +9,5 @@ edition = "2021"
 inwx = { version = "0.1.0", git = "https://github.com/HimbeerserverDE/inwx-rs.git" }
 ipnet = "2.5.0"
 preferred-ip = { version = "0.1.0", git = "https://github.com/HimbeerserverDE/preferred-ip.git" }
+serde = "1.0"
+serde_json = { version = "1.0", features = ["std"] }
