@@ -1,5 +1,7 @@
+use std::env;
 use std::fmt;
 use std::fs::File;
+use std::io::Read;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
@@ -114,9 +116,18 @@ struct Config {
 }
 
 fn main() -> Result<()> {
-    let config_file = File::open("/etc/dyndns.conf")?;
+    // Get the config path from the first command-line argument
+    // or fall back to the default /etc/dyndns.conf.
+    let config_path = env::args().nth(1).unwrap_or_else(|| {
+        String::from("/etc/dyndns.conf")
+    });
 
-    let parsed_config: Config = serde_json::from_reader(config_file)?;
+    let mut config_file = File::open(config_path.as_str())?;
+
+    let mut config_contents = String::new();
+    config_file.read_to_string(&mut config_contents).unwrap();
+
+    let parsed_config: Config = serde_json::from_str(&config_contents)?;
     let config = Arc::new(parsed_config);
 
     let config0 = config.clone();
