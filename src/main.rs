@@ -213,6 +213,24 @@ fn is_ipv4_global(addr: &Ipv4Addr) -> bool {
         && !net_contains("255.255.255.255/32", &addr)
 }
 
+fn is_ipv6_global(addr: &Ipv6Addr) -> bool {
+    let addr = (*addr).into();
+
+    !net_contains("::1/128", &addr)
+        && !net_contains("::/128", &addr)
+        && !net_contains("::ffff:0:0/96", &addr)
+        && !net_contains("::/96", &addr)
+        && !net_contains("fe80::/10", &addr)
+        && !net_contains("fc00::/7", &addr)
+        && !net_contains("2001:db8::/32", &addr)
+        && !net_contains("2002::/16", &addr)
+        && !net_contains("2001::/32", &addr)
+        && !net_contains("5f00::/8", &addr)
+        && !net_contains("3ffe::/16", &addr)
+        && !net_contains("2001:10::/28", &addr)
+        && !net_contains("ff00::/8", &addr)
+}
+
 fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     let mut ipv4 = None;
 
@@ -236,10 +254,10 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     loop {
         let ipv6s = linkaddrs::ipv6_addresses(config.link6.clone())?;
 
-        if let Some(new_ipv6) = ipv6s.first() {
-            if ipv6.is_none() || ipv6.unwrap() != *new_ipv6 {
+        for new_ipv6 in ipv6s {
+            if is_ipv6_global(&new_ipv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != new_ipv6) {
                 tx.send(Ipv6Net::new(new_ipv6.addr(), config.prefix_len)?)?;
-                ipv6 = Some(*new_ipv6);
+                ipv6 = Some(new_ipv6);
             }
         }
 
