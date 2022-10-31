@@ -2,7 +2,7 @@ use std::env;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -12,16 +12,16 @@ use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
 use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
-use ipnet::{IpBitAnd, IpBitOr, Ipv6Net};
+use ipnet::{IpBitAnd, IpBitOr, Ipv4Net, Ipv6Net};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 enum Error {
     ChannelRecv(mpsc::RecvError),
-    ChannelSend4(mpsc::SendError<Ipv4Addr>),
+    ChannelSend4(mpsc::SendError<Ipv4Net>),
     ChannelSend6(mpsc::SendError<Ipv6Net>),
     Inwx(inwx::Error),
-    PreferredIp(preferred_ip::Error),
+    LinkAddrs(linkaddrs::Error),
     ParseAddr(std::net::AddrParseError),
     PrefixLen(ipnet::PrefixLenError),
     Io(std::io::Error),
@@ -37,7 +37,7 @@ impl fmt::Display for Error {
             Self::ChannelSend4(e) => write!(fmt, "can't send to mpsc channel: {}", e),
             Self::ChannelSend6(e) => write!(fmt, "can't send to mpsc channel: {}", e),
             Self::Inwx(e) => write!(fmt, "inwx library error: {}", e),
-            Self::PreferredIp(e) => write!(fmt, "preferred_ip library error: {}", e),
+            Self::LinkAddrs(e) => write!(fmt, "linkaddrs library error: {}", e),
             Self::ParseAddr(e) => write!(fmt, "can't parse ip address: {}", e),
             Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
             Self::Io(e) => write!(fmt, "io error: {}", e),
@@ -52,8 +52,8 @@ impl From<mpsc::RecvError> for Error {
     }
 }
 
-impl From<mpsc::SendError<Ipv4Addr>> for Error {
-    fn from(e: mpsc::SendError<Ipv4Addr>) -> Self {
+impl From<mpsc::SendError<Ipv4Net>> for Error {
+    fn from(e: mpsc::SendError<Ipv4Net>) -> Self {
         Self::ChannelSend4(e)
     }
 }
@@ -70,9 +70,9 @@ impl From<inwx::Error> for Error {
     }
 }
 
-impl From<preferred_ip::Error> for Error {
-    fn from(e: preferred_ip::Error) -> Self {
-        Self::PreferredIp(e)
+impl From<linkaddrs::Error> for Error {
+    fn from(e: linkaddrs::Error) -> Self {
+        Self::LinkAddrs(e)
     }
 }
 
@@ -189,15 +189,17 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Addr>) -> Result<()> {
+fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     let mut ipv4 = None;
 
     loop {
-        let new_ipv4 = preferred_ip::ipv4_global(&config.link4)?;
+        let ipv4s = linkaddrs::ipv4_addresses(config.link4.clone())?;
 
-        if ipv4.is_none() || ipv4.unwrap() != new_ipv4 {
-            tx.send(new_ipv4)?;
-            ipv4 = Some(new_ipv4);
+        if let Some(new_ipv4) = ipv4s.first() {
+            if ipv4.is_none() || ipv4.unwrap() != *new_ipv4 {
+                tx.send(*new_ipv4)?;
+                ipv4 = Some(*new_ipv4);
+            }
         }
 
         thread::sleep(Duration::from_secs(config.interval4));
@@ -208,18 +210,20 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
-        let new_ipv6 = preferred_ip::ipv6_unicast_global(&config.link6)?;
+        let ipv6s = linkaddrs::ipv6_addresses(config.link6.clone())?;
 
-        if ipv6.is_none() || ipv6.unwrap() != new_ipv6 {
-            tx.send(Ipv6Net::new(new_ipv6, config.prefix_len)?)?;
-            ipv6 = Some(new_ipv6);
+        if let Some(new_ipv6) = ipv6s.first() {
+            if ipv6.is_none() || ipv6.unwrap() != *new_ipv6 {
+                tx.send(Ipv6Net::new(new_ipv6.addr(), config.prefix_len)?)?;
+                ipv6 = Some(*new_ipv6);
+            }
         }
 
         thread::sleep(Duration::from_secs(config.interval6));
     }
 }
 
-fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Addr>) -> Result<()> {
+fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
     let mut last_address = None;
     loop {
         let address = rx.recv()?;
