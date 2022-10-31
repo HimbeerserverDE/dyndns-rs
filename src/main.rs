@@ -234,7 +234,7 @@ fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
                 ids: config.records4.to_vec(),
                 name: None,
                 record_type: Some(RecordType::A),
-                content: Some(address.to_string()),
+                content: Some(address.addr().to_string()),
                 ttl: Some(300),
                 priority: None,
                 url_rdr_type: None,
