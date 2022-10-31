@@ -241,6 +241,8 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
             if is_ipv4_global(&new_ipv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != new_ipv4) {
                 tx.send(new_ipv4)?;
                 ipv4 = Some(new_ipv4);
+
+                break;
             }
         }
 
@@ -258,6 +260,8 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
             if is_ipv6_global(&new_ipv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != new_ipv6) {
                 tx.send(Ipv6Net::new(new_ipv6.addr(), config.prefix_len)?)?;
                 ipv6 = Some(new_ipv6);
+
+                break;
             }
         }
 
