@@ -189,6 +189,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+// Convenience wrapper.
 fn net_contains(net_str: &str, addr: &IpAddr) -> bool {
     net_str.parse::<IpNet>().unwrap().contains(addr)
 }
@@ -258,6 +259,7 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
 
         for new_ipv6 in ipv6s {
             if is_ipv6_global(&new_ipv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != new_ipv6) {
+                // Resize the prefix.
                 tx.send(Ipv6Net::new(new_ipv6.addr(), config.prefix_len)?)?;
                 ipv6 = Some(new_ipv6);
 
