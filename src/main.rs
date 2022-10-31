@@ -2,7 +2,7 @@ use std::env;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
-use std::net::Ipv6Addr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -12,7 +12,7 @@ use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
 use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
-use ipnet::{IpBitAnd, IpBitOr, Ipv4Net, Ipv6Net};
+use ipnet::{IpBitAnd, IpBitOr, IpNet, Ipv4Net, Ipv6Net};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -189,16 +189,40 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn net_contains(net_str: &str, addr: &IpAddr) -> bool {
+    net_str.parse::<IpNet>().unwrap().contains(addr)
+}
+
+fn is_ipv4_global(addr: &Ipv4Addr) -> bool {
+    let addr = (*addr).into();
+
+    !net_contains("0.0.0.0/8", &addr)
+        && !net_contains("10.0.0.0/8", &addr)
+        && !net_contains("127.0.0.0/8", &addr)
+        && !net_contains("169.254.0.0/16", &addr)
+        && !net_contains("172.16.0.0/12", &addr)
+        && !net_contains("192.0.0.0/24", &addr)
+        && !net_contains("192.0.2.0/24", &addr)
+        && !net_contains("192.88.99.0/24", &addr)
+        && !net_contains("192.168.0.0/16", &addr)
+        && !net_contains("198.18.0.0/15", &addr)
+        && !net_contains("198.51.100.0/24", &addr)
+        && !net_contains("203.0.113.0/24", &addr)
+        && !net_contains("224.0.0.0/4", &addr)
+        && !net_contains("240.0.0.0/4", &addr)
+        && !net_contains("255.255.255.255/32", &addr)
+}
+
 fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     let mut ipv4 = None;
 
     loop {
         let ipv4s = linkaddrs::ipv4_addresses(config.link4.clone())?;
 
-        if let Some(new_ipv4) = ipv4s.first() {
-            if ipv4.is_none() || ipv4.unwrap() != *new_ipv4 {
-                tx.send(*new_ipv4)?;
-                ipv4 = Some(*new_ipv4);
+        for new_ipv4 in ipv4s {
+            if is_ipv4_global(&new_ipv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != new_ipv4) {
+                tx.send(new_ipv4)?;
+                ipv4 = Some(new_ipv4);
             }
         }
 
