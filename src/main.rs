@@ -252,8 +252,6 @@ fn is_ipv6_global(addr: &Ipv6Addr) -> bool {
         && !net_contains("fe80::/10", &addr)
         && !net_contains("fc00::/7", &addr)
         && !net_contains("2001:db8::/32", &addr)
-        && !net_contains("2002::/16", &addr)
-        && !net_contains("2001::/32", &addr)
         && !net_contains("5f00::/8", &addr)
         && !net_contains("3ffe::/16", &addr)
         && !net_contains("2001:10::/28", &addr)
