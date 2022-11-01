@@ -240,6 +240,12 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
 
         for newv4 in ipv4s {
             if is_ipv4_global(&newv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != newv4) {
+                if let Some(ipv4) = ipv4 {
+                    println!("ipv4 update: {} => {}", ipv4, newv4);
+                } else {
+                    println!("ipv4: {}", newv4);
+                }
+
                 tx.send(newv4)?;
                 ipv4 = Some(newv4);
 
@@ -259,6 +265,12 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
 
         for newv6 in ipv6s {
             if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
+                if let Some(ipv6) = ipv6 {
+                    println!("ipv6 update: {} => {}", ipv6, newv6);
+                } else {
+                    println!("ipv6: {}", newv6);
+                }
+
                 // Resize the prefix.
                 tx.send(Ipv6Net::new(newv6.addr(), config.prefix_len)?)?;
                 ipv6 = Some(newv6);
