@@ -264,16 +264,18 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
         let ipv6s = linkaddrs::ipv6_addresses(config.link6.clone())?;
 
         for newv6 in ipv6s {
-            if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
+            // Resize the prefix.
+            let prefix = Ipv6Net::new(newv6.addr(), config.prefix_len)?.trunc();
+
+            if is_ipv6_global(&prefix.addr()) && (ipv6.is_none() || ipv6.unwrap() != prefix) {
                 if let Some(ipv6) = ipv6 {
-                    println!("ipv6 update: {} => {}", ipv6, newv6);
+                    println!("ipv6 update: {} => {}", ipv6, prefix);
                 } else {
-                    println!("ipv6: {}", newv6);
+                    println!("ipv6: {}", prefix);
                 }
 
-                // Resize the prefix.
-                tx.send(Ipv6Net::new(newv6.addr(), config.prefix_len)?)?;
-                ipv6 = Some(newv6);
+                tx.send(prefix)?;
+                ipv6 = Some(prefix);
 
                 break;
             }
@@ -351,8 +353,7 @@ fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
 
                 // Get the interface identifier.
                 let if_id = address.bitand(prefix.hostmask());
-                let clean_prefix = prefix.addr().bitand(prefix.netmask());
-                let new = clean_prefix.bitor(if_id);
+                let new = prefix.addr().bitor(if_id);
 
                 clt.call(RecordUpdate {
                     ids: vec![record.id],
