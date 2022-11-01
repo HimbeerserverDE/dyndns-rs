@@ -276,7 +276,10 @@ fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
     loop {
         let address = rx.recv()?;
         if last_address.is_none() || address != last_address.unwrap() {
-            let clt = Client::login(Endpoint::Sandbox, &config.user, &config.pass)?;
+            let user = config.user.clone();
+            let pass = config.pass.clone();
+
+            let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
             clt.call(RecordUpdate {
                 ids: config.records4.to_vec(),
@@ -304,7 +307,10 @@ fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
     loop {
         let prefix = rx.recv()?;
         if last_prefix.is_none() || prefix != last_prefix.unwrap() {
-            let clt = Client::login(Endpoint::Sandbox, &config.user, &config.pass)?;
+            let user = config.user.clone();
+            let pass = config.pass.clone();
+
+            let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
             let mut total_records = Vec::new();
             for id in &config.records6 {
