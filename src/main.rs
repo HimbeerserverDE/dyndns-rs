@@ -337,33 +337,29 @@ fn monitor_net6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
 }
 
 fn push_addr4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
-    let mut last_address = None;
     loop {
         let address = rx.recv()?;
-        if last_address.is_none() || address != last_address.unwrap() {
-            let user = config.user.clone();
-            let pass = config.pass.clone();
 
-            let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+        let user = config.user.clone();
+        let pass = config.pass.clone();
 
-            clt.call(RecordUpdate {
-                ids: config.records_addr4.clone(),
-                name: None,
-                record_type: Some(RecordType::A),
-                content: Some(address.addr().to_string()),
-                ttl: Some(300),
-                priority: None,
-                url_rdr_type: None,
-                url_rdr_title: None,
-                url_rdr_desc: None,
-                url_rdr_keywords: None,
-                url_rdr_favicon: None,
-                url_append: None,
-                testing_mode: false,
-            })?;
+        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
-            last_address = Some(address);
-        }
+        clt.call(RecordUpdate {
+            ids: config.records_addr4.clone(),
+            name: None,
+            record_type: Some(RecordType::A),
+            content: Some(address.addr().to_string()),
+            ttl: Some(300),
+            priority: None,
+            url_rdr_type: None,
+            url_rdr_title: None,
+            url_rdr_desc: None,
+            url_rdr_keywords: None,
+            url_rdr_favicon: None,
+            url_append: None,
+            testing_mode: false,
+        })?;
     }
 }
 
@@ -395,62 +391,58 @@ fn push_addr6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
 }
 
 fn push_net6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
-    let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
-        if last_prefix.is_none() || prefix != last_prefix.unwrap() {
-            let user = config.user.clone();
-            let pass = config.pass.clone();
 
-            let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+        let user = config.user.clone();
+        let pass = config.pass.clone();
 
-            let mut total_records = Vec::new();
-            for id in &config.records_net6 {
-                let info: RecordInfoResponse = clt
-                    .call(RecordInfoCall {
-                        domain_name: None,
-                        domain_id: None,
-                        record_id: Some(*id),
-                        record_type: Some(RecordType::Aaaa),
-                        name: None,
-                        content: None,
-                        ttl: None,
-                        priority: None,
-                    })?
-                    .try_into()?;
+        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
-                let mut records = info
-                    .records
-                    .expect("no AAAA records (this should never happen");
-
-                total_records.append(&mut records);
-            }
-
-            for record in total_records {
-                let address = Ipv6Addr::from_str(&record.content)?;
-
-                // Get the interface identifier.
-                let if_id = address.bitand(prefix.hostmask());
-                let new = prefix.addr().bitor(if_id);
-
-                clt.call(RecordUpdate {
-                    ids: vec![record.id],
-                    name: None,
+        let mut total_records = Vec::new();
+        for id in &config.records_net6 {
+            let info: RecordInfoResponse = clt
+                .call(RecordInfoCall {
+                    domain_name: None,
+                    domain_id: None,
+                    record_id: Some(*id),
                     record_type: Some(RecordType::Aaaa),
-                    content: Some(new.to_string()),
-                    ttl: Some(300),
+                    name: None,
+                    content: None,
+                    ttl: None,
                     priority: None,
-                    url_rdr_type: None,
-                    url_rdr_title: None,
-                    url_rdr_desc: None,
-                    url_rdr_keywords: None,
-                    url_rdr_favicon: None,
-                    url_append: None,
-                    testing_mode: false,
-                })?;
-            }
+                })?
+                .try_into()?;
 
-            last_prefix = Some(prefix);
+            let mut records = info
+                .records
+                .expect("no AAAA records (this should never happen");
+
+            total_records.append(&mut records);
+        }
+
+        for record in total_records {
+            let address = Ipv6Addr::from_str(&record.content)?;
+
+            // Get the interface identifier.
+            let if_id = address.bitand(prefix.hostmask());
+            let new = prefix.addr().bitor(if_id);
+
+            clt.call(RecordUpdate {
+                ids: vec![record.id],
+                name: None,
+                record_type: Some(RecordType::Aaaa),
+                content: Some(new.to_string()),
+                ttl: Some(300),
+                priority: None,
+                url_rdr_type: None,
+                url_rdr_title: None,
+                url_rdr_desc: None,
+                url_rdr_keywords: None,
+                url_rdr_favicon: None,
+                url_append: None,
+                testing_mode: false,
+            })?;
         }
     }
 }
