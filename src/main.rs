@@ -106,11 +106,12 @@ type Result<T> = std::result::Result<T, Error>;
 struct Config {
     user: String,
     pass: String,
-    records4: Vec<i32>,
-    records6: Vec<i32>,
+    records_addr4: Vec<i32>,
+    records_addr6: Vec<i32>,
+    records_net6: Vec<i32>,
     prefix_len: u8,
-    link4: String,
-    link6: String,
+    link_wan: String,
+    link_lan: String,
     interval4: u64,
     interval6: u64,
 }
@@ -133,14 +134,17 @@ fn main() -> Result<()> {
     let config0 = config.clone();
     let config1 = config.clone();
     let config2 = config.clone();
-    let config3 = config;
+    let config3 = config.clone();
+    let config4 = config.clone();
+    let config5 = config;
 
-    let (tx4, rx4) = mpsc::channel();
-    let (tx6, rx6) = mpsc::channel();
+    let (tx_addr4, rx_addr4) = mpsc::channel();
+    let (tx_addr6, rx_addr6) = mpsc::channel();
+    let (tx_net6, rx_net6) = mpsc::channel();
 
-    let push4_thread = thread::spawn(move || {
+    let push_addr4_thread = thread::spawn(move || {
         loop {
-            match push4(config0.clone(), &rx4) {
+            match push_addr4(config0.clone(), &rx_addr4) {
                 Ok(_) => { /* unreachable */ }
                 Err(e) => eprintln!("failed to push ipv4 address: {}", e),
             }
@@ -148,43 +152,65 @@ fn main() -> Result<()> {
             thread::sleep(Duration::from_secs(config0.interval4));
         }
     });
-    let push6_thread = thread::spawn(move || {
+    let push_addr6_thread = thread::spawn(move || {
         loop {
-            match push6(config1.clone(), &rx6) {
+            match push_addr6(config1.clone(), &rx_addr6) {
                 Ok(_) => { /* unreachable */ }
-                Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
+                Err(e) => eprintln!("failed to push ipv6 address: {}", e),
             }
 
             thread::sleep(Duration::from_secs(config1.interval6));
         }
     });
-
-    let monitor4_thread = thread::spawn(move || {
+    let push_net6_thread = thread::spawn(move || {
         loop {
-            match monitor4(config2.clone(), tx4.clone()) {
+            match push_net6(config2.clone(), &rx_net6) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
+            }
+
+            thread::sleep(Duration::from_secs(config2.interval6));
+        }
+    });
+
+    let monitor_addr4_thread = thread::spawn(move || {
+        loop {
+            match monitor_addr4(config3.clone(), tx_addr4.clone()) {
                 Ok(_) => { /* unreachable */ }
                 Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
             }
 
-            thread::sleep(Duration::from_secs(config2.interval4));
+            thread::sleep(Duration::from_secs(config3.interval4));
         }
     });
-    let monitor6_thread = thread::spawn(move || {
+    let monitor_addr6_thread = thread::spawn(move || {
         loop {
-            match monitor6(config3.clone(), tx6.clone()) {
+            match monitor_addr6(config4.clone(), tx_addr6.clone()) {
+                Ok(_) => { /* unreachable */ }
+                Err(e) => eprintln!("failed to monitor ipv6 address: {}", e),
+            }
+
+            thread::sleep(Duration::from_secs(config4.interval6));
+        }
+    });
+    let monitor_net6_thread = thread::spawn(move || {
+        loop {
+            match monitor_net6(config5.clone(), tx_net6.clone()) {
                 Ok(_) => { /* unreachable */ }
                 Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
             }
 
-            thread::sleep(Duration::from_secs(config3.interval6));
+            thread::sleep(Duration::from_secs(config5.interval6));
         }
     });
 
-    push4_thread.join().unwrap();
-    push6_thread.join().unwrap();
+    push_addr4_thread.join().unwrap();
+    push_addr6_thread.join().unwrap();
+    push_net6_thread.join().unwrap();
 
-    monitor4_thread.join().unwrap();
-    monitor6_thread.join().unwrap();
+    monitor_addr4_thread.join().unwrap();
+    monitor_addr6_thread.join().unwrap();
+    monitor_net6_thread.join().unwrap();
 
     Ok(())
 }
@@ -232,11 +258,11 @@ fn is_ipv6_global(addr: &Ipv6Addr) -> bool {
         && !net_contains("ff00::/8", &addr)
 }
 
-fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
+fn monitor_addr4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     let mut ipv4 = None;
 
     loop {
-        let ipv4s = linkaddrs::ipv4_addresses(config.link4.clone())?;
+        let ipv4s = linkaddrs::ipv4_addresses(config.link_wan.clone())?;
 
         for newv4 in ipv4s {
             if is_ipv4_global(&newv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != newv4) {
@@ -257,11 +283,36 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     }
 }
 
-fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
+fn monitor_addr6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
-        let ipv6s = linkaddrs::ipv6_addresses(config.link6.clone())?;
+        let ipv6s = linkaddrs::ipv6_addresses(config.link_wan.clone())?;
+
+        for newv6 in ipv6s {
+            if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
+                if let Some(ipv6) = ipv6 {
+                    println!("ipv6 update: {} => {}", ipv6, newv6);
+                } else {
+                    println!("ipv6: {}", newv6);
+                }
+
+                tx.send(newv6)?;
+                ipv6 = Some(newv6);
+
+                break;
+            }
+        }
+
+        thread::sleep(Duration::from_secs(config.interval6));
+    }
+}
+
+fn monitor_net6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
+    let mut ipv6 = None;
+
+    loop {
+        let ipv6s = linkaddrs::ipv6_addresses(config.link_lan.clone())?;
 
         for newv6 in ipv6s {
             // Resize the prefix.
@@ -269,9 +320,9 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
 
             if is_ipv6_global(&prefix.addr()) && (ipv6.is_none() || ipv6.unwrap() != prefix) {
                 if let Some(ipv6) = ipv6 {
-                    println!("ipv6 update: {} => {}", ipv6, prefix);
+                    println!("ipv6 prefix update: {} => {}", ipv6, prefix);
                 } else {
-                    println!("ipv6: {}", prefix);
+                    println!("ipv6 prefix: {}", prefix);
                 }
 
                 tx.send(prefix)?;
@@ -285,7 +336,7 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     }
 }
 
-fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
+fn push_addr4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
     let mut last_address = None;
     loop {
         let address = rx.recv()?;
@@ -296,7 +347,7 @@ fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
             let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
             clt.call(RecordUpdate {
-                ids: config.records4.to_vec(),
+                ids: config.records_addr4.clone(),
                 name: None,
                 record_type: Some(RecordType::A),
                 content: Some(address.addr().to_string()),
@@ -316,7 +367,34 @@ fn push4(config: Arc<Config>, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
     }
 }
 
-fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
+fn push_addr6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
+    loop {
+        let address = rx.recv()?;
+
+        let user = config.user.clone();
+        let pass = config.pass.clone();
+
+        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+
+        clt.call(RecordUpdate {
+            ids: config.records_addr6.clone(),
+            name: None,
+            record_type: Some(RecordType::Aaaa),
+            content: Some(address.addr().to_string()),
+            ttl: Some(300),
+            priority: None,
+            url_rdr_type: None,
+            url_rdr_title: None,
+            url_rdr_desc: None,
+            url_rdr_keywords: None,
+            url_rdr_favicon: None,
+            url_append: None,
+            testing_mode: false,
+        })?;
+    }
+}
+
+fn push_net6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
     let mut last_prefix = None;
     loop {
         let prefix = rx.recv()?;
@@ -327,7 +405,7 @@ fn push6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
             let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
             let mut total_records = Vec::new();
-            for id in &config.records6 {
+            for id in &config.records_net6 {
                 let info: RecordInfoResponse = clt
                     .call(RecordInfoCall {
                         domain_name: None,
