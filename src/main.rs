@@ -112,8 +112,9 @@ struct Config {
     records_addr6: Vec<i32>,
     records_net6: Vec<i32>,
     prefix_len: u8,
-    link_wan: String,
-    link_lan: String,
+    link_wan4: String,
+    link_wan6: String,
+    link_lan6: String,
     interval4: u64,
     interval6: u64,
 }
@@ -262,7 +263,7 @@ fn monitor_addr4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     let mut ipv4 = None;
 
     loop {
-        let ipv4s = linkaddrs::ipv4_addresses(config.link_wan.clone())?;
+        let ipv4s = linkaddrs::ipv4_addresses(config.link_wan4.clone())?;
 
         for newv4 in ipv4s {
             if is_ipv4_global(&newv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != newv4) {
@@ -287,7 +288,7 @@ fn monitor_addr6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
-        let ipv6s = linkaddrs::ipv6_addresses(config.link_wan.clone())?;
+        let ipv6s = linkaddrs::ipv6_addresses(config.link_wan6.clone())?;
 
         for newv6 in ipv6s {
             if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
@@ -312,7 +313,7 @@ fn monitor_net6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     let mut ipv6 = None;
 
     loop {
-        let ipv6s = linkaddrs::ipv6_addresses(config.link_lan.clone())?;
+        let ipv6s = linkaddrs::ipv6_addresses(config.link_lan6.clone())?;
 
         for newv6 in ipv6s {
             // Resize the prefix.
