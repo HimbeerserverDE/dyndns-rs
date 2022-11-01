@@ -26,6 +26,7 @@ enum Error {
     PrefixLen(ipnet::PrefixLenError),
     Io(std::io::Error),
     SerdeJson(serde_json::Error),
+    MissingRecord(i32),
 }
 
 impl std::error::Error for Error {}
@@ -42,6 +43,7 @@ impl fmt::Display for Error {
             Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
             Self::Io(e) => write!(fmt, "io error: {}", e),
             Self::SerdeJson(e) => write!(fmt, "serde_json library error: {}", e),
+            Self::MissingRecord(id) => write!(fmt, "missing ipv6 record (id: {})", id),
         }
     }
 }
@@ -399,7 +401,6 @@ fn push_net6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
 
         let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
-        let mut total_records = Vec::new();
         for id in &config.records_net6 {
             let info: RecordInfoResponse = clt
                 .call(RecordInfoCall {
@@ -414,17 +415,12 @@ fn push_net6(config: Arc<Config>, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
                 })?
                 .try_into()?;
 
-            let mut records = info
-                .records
-                .expect("no AAAA records (this should never happen");
+            let records = info.records.ok_or(Error::MissingRecord(*id))?;
+            let record = records.first().ok_or(Error::MissingRecord(*id))?;
 
-            total_records.append(&mut records);
-        }
-
-        for record in total_records {
             let address = Ipv6Addr::from_str(&record.content)?;
 
-            // Get the interface identifier.
+            // Get the interface identifier and append it to the new prefix.
             let if_id = address.bitand(prefix.hostmask());
             let new = prefix.addr().bitor(if_id);
 
