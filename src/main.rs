@@ -238,10 +238,10 @@ fn monitor4(config: Arc<Config>, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
     loop {
         let ipv4s = linkaddrs::ipv4_addresses(config.link4.clone())?;
 
-        for new_ipv4 in ipv4s {
-            if is_ipv4_global(&new_ipv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != new_ipv4) {
-                tx.send(new_ipv4)?;
-                ipv4 = Some(new_ipv4);
+        for newv4 in ipv4s {
+            if is_ipv4_global(&newv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != newv4) {
+                tx.send(newv4)?;
+                ipv4 = Some(newv4);
 
                 break;
             }
@@ -257,11 +257,11 @@ fn monitor6(config: Arc<Config>, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
     loop {
         let ipv6s = linkaddrs::ipv6_addresses(config.link6.clone())?;
 
-        for new_ipv6 in ipv6s {
-            if is_ipv6_global(&new_ipv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != new_ipv6) {
+        for newv6 in ipv6s {
+            if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
                 // Resize the prefix.
-                tx.send(Ipv6Net::new(new_ipv6.addr(), config.prefix_len)?)?;
-                ipv6 = Some(new_ipv6);
+                tx.send(Ipv6Net::new(newv6.addr(), config.prefix_len)?)?;
+                ipv6 = Some(newv6);
 
                 break;
             }
