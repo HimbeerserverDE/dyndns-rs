@@ -118,6 +118,7 @@ struct ConfigIpv4 {
     records: Vec<i32>,
     link: String,
     interval: u64,
+    retry: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -127,6 +128,7 @@ struct ConfigIpv6 {
     records: Vec<i32>,
     link: String,
     interval: u64,
+    retry: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -137,6 +139,7 @@ struct ConfigNet6 {
     len: u8,
     link: String,
     interval: u64,
+    retry: Option<u64>,
 }
 
 fn main() -> Result<()> {
@@ -167,7 +170,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to push ipv4 address: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(ipv4_1.interval));
+                let secs = ipv4_1.retry.unwrap_or(ipv4_1.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
 
@@ -178,7 +182,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(ipv4_2.interval));
+                let secs = ipv4_2.retry.unwrap_or(ipv4_2.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
     }
@@ -196,7 +201,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to push ipv6 address: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(ipv6_1.interval));
+                let secs = ipv6_1.retry.unwrap_or(ipv6_1.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
 
@@ -207,7 +213,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to monitor ipv6 address: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(ipv6_2.interval));
+                let secs = ipv6_2.retry.unwrap_or(ipv6_2.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
     }
@@ -225,7 +232,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(net6_1.interval));
+                let secs = net6_1.retry.unwrap_or(net6_1.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
 
@@ -236,7 +244,8 @@ fn main() -> Result<()> {
                     Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
                 }
 
-                thread::sleep(Duration::from_secs(net6_2.interval));
+                let secs = net6_2.retry.unwrap_or(net6_2.interval);
+                thread::sleep(Duration::from_secs(secs));
             }
         });
     }
