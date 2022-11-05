@@ -9,7 +9,6 @@ use std::thread;
 use std::time::Duration;
 
 use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
-use inwx::common::nameserver::RecordType;
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
 use ipnet::{IpBitAnd, IpBitOr, IpNet, Ipv4Net, Ipv6Net};
@@ -386,7 +385,7 @@ fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
         clt.call(RecordUpdate {
             ids: config.records.clone(),
             name: None,
-            record_type: Some(RecordType::A),
+            record_type: Some(String::from("A")),
             content: Some(address.addr().to_string()),
             ttl: Some(300),
             priority: None,
@@ -413,7 +412,7 @@ fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         clt.call(RecordUpdate {
             ids: config.records.clone(),
             name: None,
-            record_type: Some(RecordType::Aaaa),
+            record_type: Some(String::from("AAAA")),
             content: Some(address.addr().to_string()),
             ttl: Some(300),
             priority: None,
@@ -438,18 +437,16 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         let clt = Client::login(Endpoint::Sandbox, user, pass)?;
 
         for id in &config.records {
-            let info: RecordInfoResponse = clt
-                .call(RecordInfoCall {
-                    domain_name: None,
-                    domain_id: None,
-                    record_id: Some(*id),
-                    record_type: Some(RecordType::Aaaa),
-                    name: None,
-                    content: None,
-                    ttl: None,
-                    priority: None,
-                })?
-                .try_into()?;
+            let info: RecordInfoResponse = clt.call(RecordInfoCall {
+                domain_name: None,
+                domain_id: None,
+                record_id: Some(*id),
+                record_type: Some(String::from("AAAA")),
+                name: None,
+                content: None,
+                ttl: None,
+                priority: None,
+            })?;
 
             let records = info.records.ok_or(Error::MissingRecord(*id))?;
             let record = records.first().ok_or(Error::MissingRecord(*id))?;
@@ -463,7 +460,7 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
             clt.call(RecordUpdate {
                 ids: vec![record.id],
                 name: None,
-                record_type: Some(RecordType::Aaaa),
+                record_type: Some(String::from("AAAA")),
                 content: Some(new.to_string()),
                 ttl: Some(300),
                 priority: None,
