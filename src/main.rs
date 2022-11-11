@@ -162,28 +162,28 @@ fn main() -> Result<()> {
         let ipv4_1 = ipv4.clone();
         let ipv4_2 = ipv4.clone();
 
-        thread::spawn(move || {
-            loop {
-                match push_addr4(ipv4_1.clone(), &rx) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to push ipv4 address: {}", e),
+        thread::spawn(move || loop {
+            match push_addr4(ipv4_1.clone(), &rx) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = ipv4_1.retry.unwrap_or(ipv4_1.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to push ipv4 address: {}", e),
             }
+
+            let secs = ipv4_1.retry.unwrap_or(ipv4_1.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
 
-        thread::spawn(move || {
-            loop {
-                match monitor_addr4(ipv4_2.clone(), tx.clone()) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
+        thread::spawn(move || loop {
+            match monitor_addr4(ipv4_2.clone(), tx.clone()) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = ipv4_2.retry.unwrap_or(ipv4_2.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
             }
+
+            let secs = ipv4_2.retry.unwrap_or(ipv4_2.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
     }
 
@@ -193,28 +193,28 @@ fn main() -> Result<()> {
         let ipv6_1 = ipv6.clone();
         let ipv6_2 = ipv6.clone();
 
-        thread::spawn(move || {
-            loop {
-                match push_addr6(ipv6_1.clone(), &rx) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to push ipv6 address: {}", e),
+        thread::spawn(move || loop {
+            match push_addr6(ipv6_1.clone(), &rx) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = ipv6_1.retry.unwrap_or(ipv6_1.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to push ipv6 address: {}", e),
             }
+
+            let secs = ipv6_1.retry.unwrap_or(ipv6_1.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
 
-        thread::spawn(move || {
-            loop {
-                match monitor_addr6(ipv6_2.clone(), tx.clone()) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to monitor ipv6 address: {}", e),
+        thread::spawn(move || loop {
+            match monitor_addr6(ipv6_2.clone(), tx.clone()) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = ipv6_2.retry.unwrap_or(ipv6_2.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to monitor ipv6 address: {}", e),
             }
+
+            let secs = ipv6_2.retry.unwrap_or(ipv6_2.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
     }
 
@@ -224,28 +224,28 @@ fn main() -> Result<()> {
         let net6_1 = net6.clone();
         let net6_2 = net6.clone();
 
-        thread::spawn(move || {
-            loop {
-                match push_net6(net6_1.clone(), &rx) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
+        thread::spawn(move || loop {
+            match push_net6(net6_1.clone(), &rx) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = net6_1.retry.unwrap_or(net6_1.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
             }
+
+            let secs = net6_1.retry.unwrap_or(net6_1.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
 
-        thread::spawn(move || {
-            loop {
-                match monitor_net6(net6_2.clone(), tx.clone()) {
-                    Ok(_) => { /* unreachable */ }
-                    Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
+        thread::spawn(move || loop {
+            match monitor_net6(net6_2.clone(), tx.clone()) {
+                Ok(_) => {
+                    unreachable!()
                 }
-
-                let secs = net6_2.retry.unwrap_or(net6_2.interval);
-                thread::sleep(Duration::from_secs(secs));
+                Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
             }
+
+            let secs = net6_2.retry.unwrap_or(net6_2.interval);
+            thread::sleep(Duration::from_secs(secs));
         });
     }
 
