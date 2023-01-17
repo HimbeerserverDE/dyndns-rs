@@ -387,7 +387,13 @@ fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
         let user = config.user.clone();
         let pass = config.pass.clone();
 
-        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+        #[cfg(not(debug_assertions))]
+        let endpoint = Endpoint::Production;
+
+        #[cfg(debug_assertions)]
+        let endpoint = Endpoint::Sandbox;
+
+        let clt = Client::login(endpoint, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -414,7 +420,13 @@ fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         let user = config.user.clone();
         let pass = config.pass.clone();
 
-        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+        #[cfg(not(debug_assertions))]
+        let endpoint = Endpoint::Production;
+
+        #[cfg(debug_assertions)]
+        let endpoint = Endpoint::Sandbox;
+
+        let clt = Client::login(endpoint, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -441,7 +453,13 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         let user = config.user.clone();
         let pass = config.pass.clone();
 
-        let clt = Client::login(Endpoint::Sandbox, user, pass)?;
+        #[cfg(not(debug_assertions))]
+        let endpoint = Endpoint::Production;
+
+        #[cfg(debug_assertions)]
+        let endpoint = Endpoint::Sandbox;
+
+        let clt = Client::login(endpoint, user, pass)?;
 
         for id in &config.records {
             let info: RecordInfoResponse = clt.call(RecordInfoCall {
