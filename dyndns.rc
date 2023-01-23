@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+#
+# chkconfig: 35 99 15
+# description: DynDNS (Rust)
+#
+
+START=99
+STOP=15
+
+start() {
+	echo "Starting dyndns-rs" | logger -p daemon.info -t dyndns
+	(/usr/bin/dyndns | logger -p daemon.info -t dyndns) &
+
+	touch /var/lock/procd_dyndns.lock
+	echo "dyndns-rs startup" | logger -p daemon.info -t dyndns
+}
+
+stop() {
+	echo "Stopping dyndns-rs" | logger -p daemon.info -t dyndns
+	killall dyndns
+
+	rm -f /var/lock/procd_dyndns.lock
+}
