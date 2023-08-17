@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 enum Error {
-    InsecureConfig,
     ChannelRecv(mpsc::RecvError),
     ChannelSend4(mpsc::SendError<Ipv4Net>),
     ChannelSend6(mpsc::SendError<Ipv6Net>),
@@ -35,7 +34,6 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InsecureConfig => write!(fmt, "config has insecure permissions (need 0?00)"),
             Self::ChannelRecv(e) => write!(fmt, "can't recv from mpsc channel: {}", e),
             Self::ChannelSend4(e) => write!(fmt, "can't send to mpsc channel: {}", e),
             Self::ChannelSend6(e) => write!(fmt, "can't send to mpsc channel: {}", e),
@@ -154,7 +152,7 @@ fn main() -> Result<()> {
     let mut config_file = File::open(config_path.as_str())?;
 
     if config_file.metadata()?.permissions().mode() & 0o077 > 0 {
-        return Err(Error::InsecureConfig);
+        println!("WARNING: insecure permissions on config");
     }
 
     let mut config_contents = String::new();

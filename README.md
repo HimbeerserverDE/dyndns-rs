@@ -19,7 +19,7 @@ where config is the config path (defaults to /data/dyndns.conf).
 
 The configuration file is simply a JSON file.
 
-**Since this file contains account credentials the client will refuse to run
+**Since this file contains account credentials the client will print a warning
 if anyone other than its owner has any permissions.
 A reasonable default is 0600.**
 
