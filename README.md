@@ -13,7 +13,7 @@ It only works if you're using INWX's own nameservers for your zone.
 dyndns [config]
 ```
 
-where config is the config path (defaults to /etc/dyndns.conf).
+where config is the config path (defaults to /data/dyndns.conf).
 
 # Configuration
 

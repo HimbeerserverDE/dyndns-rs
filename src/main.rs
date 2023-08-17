@@ -146,10 +146,10 @@ struct ConfigNet6 {
 
 fn main() -> Result<()> {
     // Get the config path from the first command-line argument
-    // or fall back to the default /etc/dyndns.conf.
+    // or fall back to the default /data/dyndns.conf.
     let config_path = env::args()
         .nth(1)
-        .unwrap_or_else(|| String::from("/etc/dyndns.conf"));
+        .unwrap_or_else(|| String::from("/data/dyndns.conf"));
 
     let mut config_file = File::open(config_path.as_str())?;
 
