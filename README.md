@@ -143,7 +143,7 @@ and run on OpenWrt.
 
 ## Init script
 
-The script below can also be found in `[dyndns.rc](https://github.com/HimbeerserverDE/dyndns-rs/blob/master/dyndns.rc)`.
+The script below can also be found in [dyndns.rc](https://github.com/HimbeerserverDE/dyndns-rs/blob/master/dyndns.rc).
 This is a simple OpenWrt init script to automatically start the client:
 
 ```
