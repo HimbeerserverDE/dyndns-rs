@@ -2,7 +2,7 @@ use std::env;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
@@ -14,6 +14,10 @@ use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
 use ipnet::{IpBitAnd, IpBitOr, IpNet, Ipv4Net, Ipv6Net};
 use serde::{Deserialize, Serialize};
+use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use trust_dns_resolver::Resolver;
+
+const MAX_DNS_ATTEMPTS: usize = 3;
 
 #[derive(Debug)]
 enum Error {
@@ -26,7 +30,9 @@ enum Error {
     PrefixLen(ipnet::PrefixLenError),
     Io(std::io::Error),
     SerdeJson(serde_json::Error),
+    TrustDnsResolve(trust_dns_resolver::error::ResolveError),
     MissingRecord(i32),
+    NoHostname,
 }
 
 impl std::error::Error for Error {}
@@ -43,7 +49,9 @@ impl fmt::Display for Error {
             Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
             Self::Io(e) => write!(fmt, "io error: {}", e),
             Self::SerdeJson(e) => write!(fmt, "serde_json library error: {}", e),
+            Self::TrustDnsResolve(e) => write!(fmt, "trust_dns_resolver resolve error: {}", e),
             Self::MissingRecord(id) => write!(fmt, "missing ipv6 record (id: {})", id),
+            Self::NoHostname => write!(fmt, "can't find endpoint hostname, this shouldn't happen"),
         }
     }
 }
@@ -99,6 +107,12 @@ impl From<std::io::Error> for Error {
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Self::SerdeJson(e)
+    }
+}
+
+impl From<trust_dns_resolver::error::ResolveError> for Error {
+    fn from(e: trust_dns_resolver::error::ResolveError) -> Self {
+        Self::TrustDnsResolve(e)
     }
 }
 
@@ -391,7 +405,8 @@ fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = Client::login(endpoint, user, pass)?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -424,7 +439,8 @@ fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = Client::login(endpoint, user, pass)?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -457,7 +473,8 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = Client::login(endpoint, user, pass)?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         for id in &config.records {
             let info: RecordInfoResponse = clt.call(RecordInfoCall {
@@ -497,4 +514,38 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
             })?;
         }
     }
+}
+
+fn resolve_endpoint(endpoint: &Endpoint) -> Result<SocketAddr> {
+    for i in 0..MAX_DNS_ATTEMPTS {
+        match resolve_loopback(endpoint.domain()) {
+            Ok(ip_addr) => return Ok((ip_addr, 443).into()),
+            Err(e) => {
+                if i >= MAX_DNS_ATTEMPTS - 1 {
+                    return Err(e);
+                } else {
+                    eprintln!("{}", e);
+                }
+            }
+        }
+
+        thread::sleep(Duration::from_secs(8));
+    }
+
+    unreachable!()
+}
+
+fn resolve_loopback(hostname: &str) -> Result<IpAddr> {
+    let mut cfg = ResolverConfig::new();
+
+    cfg.add_name_server(NameServerConfig::new(
+        SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 53),
+        Protocol::Udp,
+    ));
+
+    let resolver = Resolver::new(cfg, ResolverOpts::default())?;
+    let response = resolver.lookup_ip(hostname)?;
+
+    let ip_addr = response.iter().next().ok_or(Error::NoHostname)?;
+    Ok(ip_addr)
 }
