@@ -405,12 +405,8 @@ fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = if cfg!(localhost_dns) {
-            let addr = resolve_endpoint(&endpoint)?;
-            Client::login_addr(endpoint, addr, user, pass)
-        } else {
-            Client::login(endpoint, user, pass)
-        }?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -443,12 +439,8 @@ fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = if cfg!(localhost_dns) {
-            let addr = resolve_endpoint(&endpoint)?;
-            Client::login_addr(endpoint, addr, user, pass)
-        } else {
-            Client::login(endpoint, user, pass)
-        }?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -481,12 +473,8 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let clt = if cfg!(localhost_dns) {
-            let addr = resolve_endpoint(&endpoint)?;
-            Client::login_addr(endpoint, addr, user, pass)
-        } else {
-            Client::login(endpoint, user, pass)
-        }?;
+        let addr = resolve_endpoint(&endpoint)?;
+        let clt = Client::login_addr(endpoint, addr, user, pass)?;
 
         for id in &config.records {
             let info: RecordInfoResponse = clt.call(RecordInfoCall {
