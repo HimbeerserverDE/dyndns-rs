@@ -6,6 +6,8 @@ This client uses the official XML-RPC API instead of the DynDNS API.
 As a result there is no limit on the number of DynDNS records.
 
 It only works if you're using INWX's own nameservers for your zone.
+Also it's required to have a DNS forwarder running on localhost port 53
+(IPv6 is required).
 
 # Usage
 
