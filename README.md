@@ -15,6 +15,12 @@ dyndns [config]
 
 where config is the config path (defaults to /data/dyndns.conf).
 
+# Crate features
+
+This crate provides the `localhost_dns` feature, which is enabled by default.
+If enabled, `localhost_dns` causes `[::1]:53` to be used for resolution
+of the API endpoint hostnames. Otherwise the system configuration is used.
+
 # Configuration
 
 The configuration file is simply a JSON file.
