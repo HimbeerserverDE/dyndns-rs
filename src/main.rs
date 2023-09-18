@@ -518,7 +518,7 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
 
 fn resolve_endpoint(endpoint: &Endpoint) -> Result<SocketAddr> {
     for i in 0..MAX_DNS_ATTEMPTS {
-        match resolve_loopback(endpoint.domain()) {
+        match resolve_quad9(endpoint.domain()) {
             Ok(ip_addr) => return Ok((ip_addr, 443).into()),
             Err(e) => {
                 if i >= MAX_DNS_ATTEMPTS - 1 {
@@ -535,11 +535,11 @@ fn resolve_endpoint(endpoint: &Endpoint) -> Result<SocketAddr> {
     unreachable!()
 }
 
-fn resolve_loopback(hostname: &str) -> Result<IpAddr> {
+fn resolve_quad9(hostname: &str) -> Result<IpAddr> {
     let mut cfg = ResolverConfig::new();
 
     cfg.add_name_server(NameServerConfig::new(
-        SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 53),
+        "[2620:fe::fe]:53".parse()?,
         Protocol::Udp,
     ));
 
