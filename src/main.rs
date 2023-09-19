@@ -133,6 +133,7 @@ struct ConfigIpv4 {
     link: String,
     interval: u64,
     retry: Option<u64>,
+    custom_dns: Option<SocketAddr>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -143,6 +144,7 @@ struct ConfigIpv6 {
     link: String,
     interval: u64,
     retry: Option<u64>,
+    custom_dns: Option<SocketAddr>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -154,6 +156,7 @@ struct ConfigNet6 {
     link: String,
     interval: u64,
     retry: Option<u64>,
+    custom_dns: Option<SocketAddr>,
 }
 
 fn main() -> Result<()> {
@@ -405,8 +408,13 @@ fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let addr = resolve_endpoint(&endpoint)?;
-        let clt = Client::login_addr(endpoint, addr, user, pass)?;
+        let clt = match config.custom_dns {
+            Some(custom_dns) => {
+                let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                Client::login_addr(endpoint, addr, user, pass)
+            }
+            None => Client::login(endpoint, user, pass),
+        }?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -439,8 +447,13 @@ fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let addr = resolve_endpoint(&endpoint)?;
-        let clt = Client::login_addr(endpoint, addr, user, pass)?;
+        let clt = match config.custom_dns {
+            Some(custom_dns) => {
+                let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                Client::login_addr(endpoint, addr, user, pass)
+            }
+            None => Client::login(endpoint, user, pass),
+        }?;
 
         clt.call(RecordUpdate {
             ids: config.records.clone(),
@@ -473,8 +486,13 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
         #[cfg(debug_assertions)]
         let endpoint = Endpoint::Sandbox;
 
-        let addr = resolve_endpoint(&endpoint)?;
-        let clt = Client::login_addr(endpoint, addr, user, pass)?;
+        let clt = match config.custom_dns {
+            Some(custom_dns) => {
+                let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                Client::login_addr(endpoint, addr, user, pass)
+            }
+            None => Client::login(endpoint, user, pass),
+        }?;
 
         for id in &config.records {
             let info: RecordInfoResponse = clt.call(RecordInfoCall {
@@ -516,9 +534,9 @@ fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
     }
 }
 
-fn resolve_endpoint(endpoint: &Endpoint) -> Result<SocketAddr> {
+fn resolve_endpoint(endpoint: &Endpoint, custom_dns: SocketAddr) -> Result<SocketAddr> {
     for i in 0..MAX_DNS_ATTEMPTS {
-        match resolve_quad9(endpoint.domain()) {
+        match resolve_custom_dns(endpoint.domain(), custom_dns) {
             Ok(ip_addr) => return Ok((ip_addr, 443).into()),
             Err(e) => {
                 if i >= MAX_DNS_ATTEMPTS - 1 {
@@ -535,13 +553,10 @@ fn resolve_endpoint(endpoint: &Endpoint) -> Result<SocketAddr> {
     unreachable!()
 }
 
-fn resolve_quad9(hostname: &str) -> Result<IpAddr> {
+fn resolve_custom_dns(hostname: &str, custom_dns: SocketAddr) -> Result<IpAddr> {
     let mut cfg = ResolverConfig::new();
 
-    cfg.add_name_server(NameServerConfig::new(
-        "[2620:fe::fe]:53".parse()?,
-        Protocol::Udp,
-    ));
+    cfg.add_name_server(NameServerConfig::new(custom_dns, Protocol::Udp));
 
     let resolver = Resolver::new(cfg, ResolverOpts::default())?;
     let response = resolver.lookup_ip(hostname)?;
