@@ -6,8 +6,6 @@ This client uses the official XML-RPC API instead of the DynDNS API.
 As a result there is no limit on the number of DynDNS records.
 
 It only works if you're using INWX's own nameservers for your zone.
-Also the Quad9 resolver `2620:fe::fe` must be reachable over IPv6 on port 53,
-though this can easily be changed in the code. Configurability is planned.
 
 # Usage
 
@@ -29,6 +27,23 @@ Unfortunately INWX does not support API tokens.
 
 *Two-factor authentication is currently not supported by this program.
 Feel free to contribute.*
+
+## Custom servers for DNS resolution
+
+If you want to run this program on a platform like
+[rustkrazy](https://github.com/rustkrazy) that can't perform regular
+DNS lookups you may want to set your own nameserver in the config.
+This enables an in-process resolver instead of relying on libc.
+
+All subsections accept an optional `custom_dns` setting
+that's expected to be a JSON string containing a socket address
+including the IP address (either version) and the port (mandatory).
+
+This snippet enables custom DNS resolution using Quad9's Do53 resolver:
+
+```
+"custom_dns": "[2620:fe::fe]:53"
+```
 
 ## Getting your record IDs
 
