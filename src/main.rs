@@ -123,6 +123,7 @@ struct Config {
     ipv4: Option<ConfigIpv4>,
     ipv6: Option<ConfigIpv6>,
     net6: Option<ConfigNet6>,
+    interval: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -131,8 +132,6 @@ struct ConfigIpv4 {
     pass: String,
     records: Vec<i32>,
     link: String,
-    interval: u64,
-    retry: Option<u64>,
     custom_dns: Option<SocketAddr>,
 }
 
@@ -142,8 +141,6 @@ struct ConfigIpv6 {
     pass: String,
     records: Vec<i32>,
     link: String,
-    interval: u64,
-    retry: Option<u64>,
     custom_dns: Option<SocketAddr>,
 }
 
@@ -154,9 +151,24 @@ struct ConfigNet6 {
     records: Vec<i32>,
     len: u8,
     link: String,
-    interval: u64,
-    retry: Option<u64>,
     custom_dns: Option<SocketAddr>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AddrState {
+    addr4: Ipv4Addr,
+    addr6: Ipv6Addr,
+    net6: Ipv6Net,
+}
+
+impl AddrState {
+    fn new() -> Self {
+        Self {
+            addr4: Ipv4Addr::UNSPECIFIED,
+            addr6: Ipv6Addr::UNSPECIFIED,
+            net6: Ipv6Net::default(),
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -169,7 +181,7 @@ fn main() -> Result<()> {
     let mut config_file = File::open(config_path.as_str())?;
 
     if config_file.metadata()?.permissions().mode() & 0o077 > 0 {
-        println!("WARNING: insecure permissions on config");
+        println!("[warn] WARNING: insecure permissions on config");
     }
 
     let mut config_contents = String::new();
@@ -178,100 +190,169 @@ fn main() -> Result<()> {
     let parsed_config: Config = serde_json::from_str(&config_contents)?;
     let config = Arc::new(parsed_config);
 
-    if let Some(ipv4) = &config.ipv4 {
-        let (tx, rx) = mpsc::channel();
+    let mut state = AddrState::new();
+    loop {
+        match logic(&mut state, &config) {
+            Ok(_) => {}
+            Err(e) => eprintln!("[warn] {}", e),
+        }
 
-        let ipv4_1 = ipv4.clone();
-        let ipv4_2 = ipv4.clone();
+        thread::sleep(Duration::from_secs(config.interval));
+    }
+}
 
-        thread::spawn(move || loop {
-            match push_addr4(ipv4_1.clone(), &rx) {
-                Ok(_) => {
-                    unreachable!()
-                }
-                Err(e) => eprintln!("failed to push ipv4 address: {}", e),
-            }
-
-            let secs = ipv4_1.retry.unwrap_or(ipv4_1.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
-
-        thread::spawn(move || loop {
-            match monitor_addr4(ipv4_2.clone(), tx.clone()) {
-                Ok(_) => {
-                    unreachable!()
-                }
-                Err(e) => eprintln!("failed to monitor ipv4 address: {}", e),
-            }
-
-            let secs = ipv4_2.retry.unwrap_or(ipv4_2.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
+fn logic(state: &mut AddrState, config: &Config) -> Result<()> {
+    if let Some(ref config) = config.ipv4 {
+        logic_addr4(state, config)?;
+    }
+    if let Some(ref config) = config.ipv6 {
+        logic_addr6(state, config)?;
+    }
+    if let Some(ref config) = config.net6 {
+        logic_net6(state, config)?;
     }
 
-    if let Some(ipv6) = &config.ipv6 {
-        let (tx, rx) = mpsc::channel();
+    Ok(())
+}
 
-        let ipv6_1 = ipv6.clone();
-        let ipv6_2 = ipv6.clone();
+fn logic_addr4(state: &mut AddrState, config: &ConfigIpv4) -> Result<()> {
+    if let Some(addr4) = linkaddrs::ipv4_addresses(config.link.clone())?
+        .into_iter()
+        .map(|net| net.addr())
+        .find(is_ipv4_global)
+    {
+        if addr4 != state.addr4 {
+            println!("[info] ipv4 {} => {}", state.addr4, addr4);
 
-        thread::spawn(move || loop {
-            match push_addr6(ipv6_1.clone(), &rx) {
-                Ok(_) => {
-                    unreachable!()
+            let user = config.user.clone();
+            let pass = config.pass.clone();
+
+            #[cfg(not(debug_assertions))]
+            let endpoint = Endpoint::Production;
+
+            #[cfg(debug_assertions)]
+            let endpoint = Endpoint::Sandbox;
+
+            let clt = match config.custom_dns {
+                Some(custom_dns) => {
+                    let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                    Client::login_addr(endpoint, addr, user, pass)
                 }
-                Err(e) => eprintln!("failed to push ipv6 address: {}", e),
-            }
+                None => Client::login(endpoint, user, pass),
+            }?;
 
-            let secs = ipv6_1.retry.unwrap_or(ipv6_1.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
+            clt.call(RecordUpdate {
+                ids: config.records.clone(),
+                record_type: Some("A".to_owned()),
+                content: Some(addr4.to_string()),
+                ttl: Some(300),
+                ..Default::default()
+            })?;
 
-        thread::spawn(move || loop {
-            match monitor_addr6(ipv6_2.clone(), tx.clone()) {
-                Ok(_) => {
-                    unreachable!()
-                }
-                Err(e) => eprintln!("failed to monitor ipv6 address: {}", e),
-            }
-
-            let secs = ipv6_2.retry.unwrap_or(ipv6_2.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
+            state.addr4 = addr4;
+        }
     }
 
-    if let Some(net6) = &config.net6 {
-        let (tx, rx) = mpsc::channel();
+    Ok(())
+}
 
-        let net6_1 = net6.clone();
-        let net6_2 = net6.clone();
+fn logic_addr6(state: &mut AddrState, config: &ConfigIpv6) -> Result<()> {
+    if let Some(addr6) = linkaddrs::ipv6_addresses(config.link.clone())?
+        .into_iter()
+        .map(|net| net.addr())
+        .find(is_ipv6_global)
+    {
+        if addr6 != state.addr6 {
+            println!("[info] ipv6 {} => {}", state.addr6, addr6);
 
-        thread::spawn(move || loop {
-            match push_net6(net6_1.clone(), &rx) {
-                Ok(_) => {
-                    unreachable!()
+            let user = config.user.clone();
+            let pass = config.pass.clone();
+
+            #[cfg(not(debug_assertions))]
+            let endpoint = Endpoint::Production;
+
+            #[cfg(debug_assertions)]
+            let endpoint = Endpoint::Sandbox;
+
+            let clt = match config.custom_dns {
+                Some(custom_dns) => {
+                    let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                    Client::login_addr(endpoint, addr, user, pass)
                 }
-                Err(e) => eprintln!("failed to push ipv6 prefix: {}", e),
-            }
+                None => Client::login(endpoint, user, pass),
+            }?;
 
-            let secs = net6_1.retry.unwrap_or(net6_1.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
+            clt.call(RecordUpdate {
+                ids: config.records.clone(),
+                record_type: Some("AAAA".to_owned()),
+                content: Some(addr6.to_string()),
+                ttl: Some(300),
+                ..Default::default()
+            })?;
 
-        thread::spawn(move || loop {
-            match monitor_net6(net6_2.clone(), tx.clone()) {
-                Ok(_) => {
-                    unreachable!()
-                }
-                Err(e) => eprintln!("failed to monitor ipv6 prefix: {}", e),
-            }
-
-            let secs = net6_2.retry.unwrap_or(net6_2.interval);
-            thread::sleep(Duration::from_secs(secs));
-        });
+            state.addr6 = addr6;
+        }
     }
 
-    thread::park();
+    Ok(())
+}
+
+fn logic_net6(state: &mut AddrState, config: &ConfigNet6) -> Result<()> {
+    if let Some(net6) = linkaddrs::ipv6_addresses(config.link.clone())?
+        .into_iter()
+        .find(|net| is_ipv6_global(&net.addr()))
+    {
+        // Resize the prefix.
+        let net6 = Ipv6Net::new(net6.addr(), config.len)?.trunc();
+
+        if net6 != state.net6 {
+            println!("[info] net6 {} => {}", state.net6, net6);
+
+            let user = config.user.clone();
+            let pass = config.pass.clone();
+
+            #[cfg(not(debug_assertions))]
+            let endpoint = Endpoint::Production;
+
+            #[cfg(debug_assertions)]
+            let endpoint = Endpoint::Sandbox;
+
+            let clt = match config.custom_dns {
+                Some(custom_dns) => {
+                    let addr = resolve_endpoint(&endpoint, custom_dns)?;
+                    Client::login_addr(endpoint, addr, user, pass)
+                }
+                None => Client::login(endpoint, user, pass),
+            }?;
+
+            for record_id in &config.records {
+                let info: RecordInfoResponse = clt.call(RecordInfoCall {
+                    record_id: Some(*record_id),
+                    record_type: Some("AAAA".to_owned()),
+                    ..Default::default()
+                })?;
+
+                let records = info.records.ok_or(Error::MissingRecord(*record_id))?;
+                let record = records.first().ok_or(Error::MissingRecord(*record_id))?;
+
+                let address = Ipv6Addr::from_str(&record.content)?;
+
+                // Get the interface identifier and append it to the new prefix.
+                let if_id = address.bitand(net6.hostmask());
+                let new = net6.addr().bitor(if_id);
+
+                clt.call(RecordUpdate {
+                    ids: vec![record.id],
+                    record_type: Some("AAAA".to_owned()),
+                    content: Some(new.to_string()),
+                    ttl: Some(300),
+                    ..Default::default()
+                })?;
+            }
+
+            state.net6 = net6;
+        }
+    }
 
     Ok(())
 }
@@ -315,223 +396,6 @@ fn is_ipv6_global(addr: &Ipv6Addr) -> bool {
         && !net_contains("3ffe::/16", &addr)
         && !net_contains("2001:10::/28", &addr)
         && !net_contains("ff00::/8", &addr)
-}
-
-fn monitor_addr4(config: ConfigIpv4, tx: mpsc::Sender<Ipv4Net>) -> Result<()> {
-    let mut ipv4 = None;
-
-    loop {
-        let ipv4s = linkaddrs::ipv4_addresses(config.link.clone())?;
-
-        for newv4 in ipv4s {
-            if is_ipv4_global(&newv4.addr()) && (ipv4.is_none() || ipv4.unwrap() != newv4) {
-                if let Some(ipv4) = ipv4 {
-                    println!("ipv4 update: {} => {}", ipv4, newv4);
-                } else {
-                    println!("ipv4: {}", newv4);
-                }
-
-                tx.send(newv4)?;
-                ipv4 = Some(newv4);
-
-                break;
-            }
-        }
-
-        thread::sleep(Duration::from_secs(config.interval));
-    }
-}
-
-fn monitor_addr6(config: ConfigIpv6, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
-    let mut ipv6 = None;
-
-    loop {
-        let ipv6s = linkaddrs::ipv6_addresses(config.link.clone())?;
-
-        for newv6 in ipv6s {
-            if is_ipv6_global(&newv6.addr()) && (ipv6.is_none() || ipv6.unwrap() != newv6) {
-                if let Some(ipv6) = ipv6 {
-                    println!("ipv6 update: {} => {}", ipv6, newv6);
-                } else {
-                    println!("ipv6: {}", newv6);
-                }
-
-                tx.send(newv6)?;
-                ipv6 = Some(newv6);
-
-                break;
-            }
-        }
-
-        thread::sleep(Duration::from_secs(config.interval));
-    }
-}
-
-fn monitor_net6(config: ConfigNet6, tx: mpsc::Sender<Ipv6Net>) -> Result<()> {
-    let mut ipv6 = None;
-
-    loop {
-        let ipv6s = linkaddrs::ipv6_addresses(config.link.clone())?;
-
-        for newv6 in ipv6s {
-            // Resize the prefix.
-            let prefix = Ipv6Net::new(newv6.addr(), config.len)?.trunc();
-
-            if is_ipv6_global(&prefix.addr()) && (ipv6.is_none() || ipv6.unwrap() != prefix) {
-                if let Some(ipv6) = ipv6 {
-                    println!("ipv6 prefix update: {} => {}", ipv6, prefix);
-                } else {
-                    println!("ipv6 prefix: {}", prefix);
-                }
-
-                tx.send(prefix)?;
-                ipv6 = Some(prefix);
-
-                break;
-            }
-        }
-
-        thread::sleep(Duration::from_secs(config.interval));
-    }
-}
-
-fn push_addr4(config: ConfigIpv4, rx: &mpsc::Receiver<Ipv4Net>) -> Result<()> {
-    loop {
-        let address = rx.recv()?;
-
-        let user = config.user.clone();
-        let pass = config.pass.clone();
-
-        #[cfg(not(debug_assertions))]
-        let endpoint = Endpoint::Production;
-
-        #[cfg(debug_assertions)]
-        let endpoint = Endpoint::Sandbox;
-
-        let clt = match config.custom_dns {
-            Some(custom_dns) => {
-                let addr = resolve_endpoint(&endpoint, custom_dns)?;
-                Client::login_addr(endpoint, addr, user, pass)
-            }
-            None => Client::login(endpoint, user, pass),
-        }?;
-
-        clt.call(RecordUpdate {
-            ids: config.records.clone(),
-            name: None,
-            record_type: Some(String::from("A")),
-            content: Some(address.addr().to_string()),
-            ttl: Some(300),
-            priority: None,
-            url_rdr_type: None,
-            url_rdr_title: None,
-            url_rdr_desc: None,
-            url_rdr_keywords: None,
-            url_rdr_favicon: None,
-            url_append: None,
-            testing_mode: false,
-        })?;
-    }
-}
-
-fn push_addr6(config: ConfigIpv6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
-    loop {
-        let address = rx.recv()?;
-
-        let user = config.user.clone();
-        let pass = config.pass.clone();
-
-        #[cfg(not(debug_assertions))]
-        let endpoint = Endpoint::Production;
-
-        #[cfg(debug_assertions)]
-        let endpoint = Endpoint::Sandbox;
-
-        let clt = match config.custom_dns {
-            Some(custom_dns) => {
-                let addr = resolve_endpoint(&endpoint, custom_dns)?;
-                Client::login_addr(endpoint, addr, user, pass)
-            }
-            None => Client::login(endpoint, user, pass),
-        }?;
-
-        clt.call(RecordUpdate {
-            ids: config.records.clone(),
-            name: None,
-            record_type: Some(String::from("AAAA")),
-            content: Some(address.addr().to_string()),
-            ttl: Some(300),
-            priority: None,
-            url_rdr_type: None,
-            url_rdr_title: None,
-            url_rdr_desc: None,
-            url_rdr_keywords: None,
-            url_rdr_favicon: None,
-            url_append: None,
-            testing_mode: false,
-        })?;
-    }
-}
-
-fn push_net6(config: ConfigNet6, rx: &mpsc::Receiver<Ipv6Net>) -> Result<()> {
-    loop {
-        let prefix = rx.recv()?;
-
-        let user = config.user.clone();
-        let pass = config.pass.clone();
-
-        #[cfg(not(debug_assertions))]
-        let endpoint = Endpoint::Production;
-
-        #[cfg(debug_assertions)]
-        let endpoint = Endpoint::Sandbox;
-
-        let clt = match config.custom_dns {
-            Some(custom_dns) => {
-                let addr = resolve_endpoint(&endpoint, custom_dns)?;
-                Client::login_addr(endpoint, addr, user, pass)
-            }
-            None => Client::login(endpoint, user, pass),
-        }?;
-
-        for id in &config.records {
-            let info: RecordInfoResponse = clt.call(RecordInfoCall {
-                domain_name: None,
-                domain_id: None,
-                record_id: Some(*id),
-                record_type: Some(String::from("AAAA")),
-                name: None,
-                content: None,
-                ttl: None,
-                priority: None,
-            })?;
-
-            let records = info.records.ok_or(Error::MissingRecord(*id))?;
-            let record = records.first().ok_or(Error::MissingRecord(*id))?;
-
-            let address = Ipv6Addr::from_str(&record.content)?;
-
-            // Get the interface identifier and append it to the new prefix.
-            let if_id = address.bitand(prefix.hostmask());
-            let new = prefix.addr().bitor(if_id);
-
-            clt.call(RecordUpdate {
-                ids: vec![record.id],
-                name: None,
-                record_type: Some(String::from("AAAA")),
-                content: Some(new.to_string()),
-                ttl: Some(300),
-                priority: None,
-                url_rdr_type: None,
-                url_rdr_title: None,
-                url_rdr_desc: None,
-                url_rdr_keywords: None,
-                url_rdr_favicon: None,
-                url_append: None,
-                testing_mode: false,
-            })?;
-        }
-    }
 }
 
 fn resolve_endpoint(endpoint: &Endpoint, custom_dns: SocketAddr) -> Result<SocketAddr> {
