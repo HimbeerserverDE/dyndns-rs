@@ -1,10 +1,9 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 use std::net::{self, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -109,11 +108,7 @@ fn main() -> Result<()> {
         println!("[warn] WARNING: insecure permissions on config");
     }
 
-    let mut config_contents = String::new();
-    config_file.read_to_string(&mut config_contents).unwrap();
-
-    let parsed_config: Config = serde_json::from_str(&config_contents)?;
-    let config = Arc::new(parsed_config);
+    let config: Config = serde_json::from_reader(&mut config_file)?;
 
     let mut state = AddrState::new();
     loop {
