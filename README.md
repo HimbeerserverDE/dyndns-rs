@@ -62,18 +62,15 @@ The number X is the record ID.
 		"user": "INWX_ACCOUNT_NAME",
 		"pass": "INWX_ACCOUNT_PASSWD",
 		"records": [1, 2, 4],
-		"link": "ROUTER_WAN_INTERFACE",
-		"interval": 300,
-		"retry": 30
+		"link": "ROUTER_WAN_INTERFACE"
 	},
 	"ipv6": {
 		"user": "INWX_ACCOUNT_NAME",
 		"pass": "INWX_ACCOUNT_PASSWD",
 		"records": [8, 16, 32],
-		"link": "ROUTER_WAN_INTERFACE",
-		"interval": 300,
-		"retry": 30
-	}
+		"link": "ROUTER_WAN_INTERFACE"
+	},
+	"interval": 300
 }
 ```
 
@@ -83,9 +80,10 @@ to all records from the list.
 If multiple global addresses are present, a random one is selected.
 
 The client checks for address updates every 300 seconds (5 minutes, can be changed).
-The retry interval is optional. If the address update check or API call fails,
-the client will make infinite attempts at this interval.
-It defaults to the regular interval if unspecified.
+If the address update check or API call fails,
+the client will retry after the interval has passed.
+As a result the new values will be pushed within the interval
+as soon as the issue is solved.
 
 *You do not need to initialize the records to a specific value.
 Initializing to `0.0.0.0` or `::` is sufficient.*
@@ -117,10 +115,9 @@ in most single-subnet LANs.
 		"pass": "INWX_ACCOUNT_PASSWD",
 		"records": [64, 128, 256],
 		"len": 56,
-		"link": "ROUTER_PRIMARY_LAN_INTERFACE",
-		"interval": 300,
-		"retry": 30
-	}
+		"link": "ROUTER_PRIMARY_LAN_INTERFACE"
+	},
+	"interval": 300
 }
 ```
 
@@ -129,7 +126,8 @@ with the correct interface identifiers. You can use any prefix,
 but I recommend to just set it to all-zero. Example: `::abcd`.*
 
 Do note that you can merge this with the basic config
-if you want router connectivity via DynDNS.
+if you want router connectivity via DynDNS, though only one
+`interval` key is used in this case.
 
 # OpenWrt
 
