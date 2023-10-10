@@ -1,119 +1,44 @@
 use std::env;
-use std::fmt;
 use std::fs::File;
-use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::io::{self, Read};
+use std::net::{self, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::str::FromStr;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use inwx::call::nameserver::{RecordInfo as RecordInfoCall, RecordUpdate};
 use inwx::response::nameserver::RecordInfo as RecordInfoResponse;
 use inwx::{Client, Endpoint};
-use ipnet::{IpBitAnd, IpBitOr, IpNet, Ipv4Net, Ipv6Net};
+use ipnet::{IpBitAnd, IpBitOr, IpNet, Ipv6Net};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
 use trust_dns_resolver::Resolver;
 
 const MAX_DNS_ATTEMPTS: usize = 3;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum Error {
-    ChannelRecv(mpsc::RecvError),
-    ChannelSend4(mpsc::SendError<Ipv4Net>),
-    ChannelSend6(mpsc::SendError<Ipv6Net>),
-    Inwx(inwx::Error),
-    LinkAddrs(linkaddrs::Error),
-    ParseAddr(std::net::AddrParseError),
-    PrefixLen(ipnet::PrefixLenError),
-    Io(std::io::Error),
-    SerdeJson(serde_json::Error),
-    TrustDnsResolve(trust_dns_resolver::error::ResolveError),
+    #[error("inwx: {0}")]
+    Inwx(#[from] inwx::Error),
+    #[error("linkaddrs: {0}")]
+    LinkAddrs(#[from] linkaddrs::Error),
+    #[error("can't parse ip address: {0}")]
+    ParseAddr(#[from] net::AddrParseError),
+    #[error("prefix length error: {0}")]
+    PrefixLen(#[from] ipnet::PrefixLenError),
+    #[error("io: {0}")]
+    Io(#[from] io::Error),
+    #[error("serde_json: {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[error("trust_dns_resolver resolve error: {0}")]
+    TrustDnsResolve(#[from] trust_dns_resolver::error::ResolveError),
+    #[error("missing ipv6 record (id: {0})")]
     MissingRecord(i32),
+    #[error("can't find endpoint hostname, this shouldn't happen")]
     NoHostname,
-}
-
-impl std::error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ChannelRecv(e) => write!(fmt, "can't recv from mpsc channel: {}", e),
-            Self::ChannelSend4(e) => write!(fmt, "can't send to mpsc channel: {}", e),
-            Self::ChannelSend6(e) => write!(fmt, "can't send to mpsc channel: {}", e),
-            Self::Inwx(e) => write!(fmt, "inwx library error: {}", e),
-            Self::LinkAddrs(e) => write!(fmt, "linkaddrs library error: {}", e),
-            Self::ParseAddr(e) => write!(fmt, "can't parse ip address: {}", e),
-            Self::PrefixLen(e) => write!(fmt, "prefix length error: {}", e),
-            Self::Io(e) => write!(fmt, "io error: {}", e),
-            Self::SerdeJson(e) => write!(fmt, "serde_json library error: {}", e),
-            Self::TrustDnsResolve(e) => write!(fmt, "trust_dns_resolver resolve error: {}", e),
-            Self::MissingRecord(id) => write!(fmt, "missing ipv6 record (id: {})", id),
-            Self::NoHostname => write!(fmt, "can't find endpoint hostname, this shouldn't happen"),
-        }
-    }
-}
-
-impl From<mpsc::RecvError> for Error {
-    fn from(e: mpsc::RecvError) -> Self {
-        Self::ChannelRecv(e)
-    }
-}
-
-impl From<mpsc::SendError<Ipv4Net>> for Error {
-    fn from(e: mpsc::SendError<Ipv4Net>) -> Self {
-        Self::ChannelSend4(e)
-    }
-}
-
-impl From<mpsc::SendError<Ipv6Net>> for Error {
-    fn from(e: mpsc::SendError<Ipv6Net>) -> Self {
-        Self::ChannelSend6(e)
-    }
-}
-
-impl From<inwx::Error> for Error {
-    fn from(e: inwx::Error) -> Self {
-        Self::Inwx(e)
-    }
-}
-
-impl From<linkaddrs::Error> for Error {
-    fn from(e: linkaddrs::Error) -> Self {
-        Self::LinkAddrs(e)
-    }
-}
-
-impl From<std::net::AddrParseError> for Error {
-    fn from(e: std::net::AddrParseError) -> Self {
-        Self::ParseAddr(e)
-    }
-}
-
-impl From<ipnet::PrefixLenError> for Error {
-    fn from(e: ipnet::PrefixLenError) -> Self {
-        Self::PrefixLen(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Self::SerdeJson(e)
-    }
-}
-
-impl From<trust_dns_resolver::error::ResolveError> for Error {
-    fn from(e: trust_dns_resolver::error::ResolveError) -> Self {
-        Self::TrustDnsResolve(e)
-    }
 }
 
 type Result<T> = std::result::Result<T, Error>;
