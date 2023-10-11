@@ -123,26 +123,26 @@ fn main() -> Result<()> {
 
 fn logic(state: &mut AddrState, config: &Config) -> Result<()> {
     if let Some(ref config) = config.ipv4 {
-        logic_addr4(state, config)?;
+        logic_addr4(&mut state.addr4, config)?;
     }
     if let Some(ref config) = config.ipv6 {
-        logic_addr6(state, config)?;
+        logic_addr6(&mut state.addr6, config)?;
     }
     if let Some(ref config) = config.net6 {
-        logic_net6(state, config)?;
+        logic_net6(&mut state.net6, config)?;
     }
 
     Ok(())
 }
 
-fn logic_addr4(state: &mut AddrState, config: &ConfigIpv4) -> Result<()> {
+fn logic_addr4(state: &mut Ipv4Addr, config: &ConfigIpv4) -> Result<()> {
     if let Some(addr4) = linkaddrs::ipv4_addresses(config.link.clone())?
         .into_iter()
         .map(|net| net.addr())
         .find(is_ipv4_global)
     {
-        if addr4 != state.addr4 {
-            println!("[info] ipv4 {} => {}", state.addr4, addr4);
+        if addr4 != *state {
+            println!("[info] ipv4 {} => {}", state, addr4);
 
             let user = config.user.clone();
             let pass = config.pass.clone();
@@ -169,21 +169,21 @@ fn logic_addr4(state: &mut AddrState, config: &ConfigIpv4) -> Result<()> {
                 ..Default::default()
             })?;
 
-            state.addr4 = addr4;
+            *state = addr4;
         }
     }
 
     Ok(())
 }
 
-fn logic_addr6(state: &mut AddrState, config: &ConfigIpv6) -> Result<()> {
+fn logic_addr6(state: &mut Ipv6Addr, config: &ConfigIpv6) -> Result<()> {
     if let Some(addr6) = linkaddrs::ipv6_addresses(config.link.clone())?
         .into_iter()
         .map(|net| net.addr())
         .find(is_ipv6_global)
     {
-        if addr6 != state.addr6 {
-            println!("[info] ipv6 {} => {}", state.addr6, addr6);
+        if addr6 != *state {
+            println!("[info] ipv6 {} => {}", state, addr6);
 
             let user = config.user.clone();
             let pass = config.pass.clone();
@@ -210,14 +210,14 @@ fn logic_addr6(state: &mut AddrState, config: &ConfigIpv6) -> Result<()> {
                 ..Default::default()
             })?;
 
-            state.addr6 = addr6;
+            *state = addr6;
         }
     }
 
     Ok(())
 }
 
-fn logic_net6(state: &mut AddrState, config: &ConfigNet6) -> Result<()> {
+fn logic_net6(state: &mut Ipv6Net, config: &ConfigNet6) -> Result<()> {
     if let Some(net6) = linkaddrs::ipv6_addresses(config.link.clone())?
         .into_iter()
         .find(|net| is_ipv6_global(&net.addr()))
@@ -225,8 +225,8 @@ fn logic_net6(state: &mut AddrState, config: &ConfigNet6) -> Result<()> {
         // Resize the prefix.
         let net6 = Ipv6Net::new(net6.addr(), config.len)?.trunc();
 
-        if net6 != state.net6 {
-            println!("[info] net6 {} => {}", state.net6, net6);
+        if net6 != *state {
+            println!("[info] net6 {} => {}", state, net6);
 
             let user = config.user.clone();
             let pass = config.pass.clone();
@@ -270,7 +270,7 @@ fn logic_net6(state: &mut AddrState, config: &ConfigNet6) -> Result<()> {
                 })?;
             }
 
-            state.net6 = net6;
+            *state = net6;
         }
     }
 
