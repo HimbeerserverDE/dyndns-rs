@@ -326,7 +326,7 @@ fn resolve_endpoint(endpoint: &Endpoint, custom_dns: SocketAddr) -> Result<Socke
                 if i >= MAX_DNS_ATTEMPTS - 1 {
                     return Err(e);
                 } else {
-                    eprintln!("{}", e);
+                    eprintln!("[warn] {}", e);
                 }
             }
         }
